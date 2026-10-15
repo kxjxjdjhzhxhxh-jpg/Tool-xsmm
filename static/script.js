@@ -66,6 +66,7 @@ function setStatus(tool, status, sessionId = null) {
     if (form) form.querySelectorAll('input, textarea, select').forEach(el => el.disabled = isRunning);
 }
 
+// ================== BUILD INPUT SEQUENCE ==================
 function buildInputSequence(tool) {
     const token = (getCfg(tool, 'cfg-token')?.value || '').trim();
     const cookiesRaw = (getCfg(tool, 'cfg-cookies')?.value || '').trim();
@@ -73,6 +74,7 @@ function buildInputSequence(tool) {
     const delayTym = getCfg(tool, 'cfg-delay-tym')?.value || '10';
     const delayFollow = getCfg(tool, 'cfg-delay-follow')?.value || '15';
     const delayComment = getCfg(tool, 'cfg-delay-comment')?.value || '20';
+    const threads = getCfg(tool, 'cfg-threads')?.value || '10';       // 👈 SỐ LUỒNG
     const rotate = getCfg(tool, 'cfg-rotate')?.value || '99999';
     const wait = getCfg(tool, 'cfg-wait')?.value || '150';
     const jobLike = getCfg(tool, 'cfg-job-like')?.checked;
@@ -93,6 +95,7 @@ function buildInputSequence(tool) {
     const seq = [];
 
     if (tool === 'xsmmv3.2') {
+        seq.push(threads);   // 👈 GỬI SỐ LUỒNG TRƯỚC TIÊN
         seq.push(token);
         seq.push(String(cookies.length));
         for (let i = 0; i < cookies.length; i++) {
@@ -218,11 +221,11 @@ $$('.btn-save').forEach(btn => {
         const data = await res.json();
         if (data.ok) alert('Đã lưu: ' + data.filename);
         else alert('Lỗi: ' + (data.error || ''));
-    });
+   .addEventListener });
 });
 
 // STDIN
-function sendStdin(tool) {
+function sendStdin(tool)(' {
     const input = $(`.stdin-input[data-tool="${tool}"]`); if (!input) return;
     const text = input.value;
     const s = state[tool]; if (!s || !s.sessionId) return;
@@ -235,7 +238,7 @@ function sendStdin(tool) {
     input.value = '';
 }
 $$('.btn-send').forEach(btn => btn.addEventListener('click', () => sendStdin(btn.dataset.tool)));
-$$('.stdin-input').forEach(inp => inp.addEventListener('keydown', e => {
+$$('.stdin-input').forEach(inp => inpkeydown', e => {
     if (e.key === 'Enter') sendStdin(inp.dataset.tool);
 }));
 
@@ -267,9 +270,9 @@ socket.on('cleared', data => {
     if (tool) { const t = getTerm(tool); if (t) t.innerHTML = ''; }
 });
 
-// Auto save config
+// ================== LƯU CẤU HÌNH ==================
 const CFG_FIELDS = ['cfg-token', 'cfg-cookies', 'cfg-cookiecheck', 'cfg-delay-tym', 'cfg-delay-follow',
-                    'cfg-delay-comment', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
+                    'cfg-delay-comment', 'cfg-threads', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
 
 CFG_FIELDS.forEach(cls => {
     $$('.' + cls).forEach(input => {
@@ -293,7 +296,6 @@ CFG_FIELDS.forEach(cls => {
     });
 });
 
-// Sessions count
 fetch('/api/sessions').then(r => r.json()).then(list => {
     const el = $('#sessions-count'); if (el) el.textContent = list.length + ' sessions';
 });
