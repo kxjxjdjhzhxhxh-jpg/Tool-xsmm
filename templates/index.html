@@ -13,7 +13,7 @@
             <span class="logo-icon">🚀</span>
             <div>
                 <h1>TA TOOL WEB MANAGER</h1>
-                <p class="subtitle">Chạy 3 Tool Instagram — Bản quyền: TA Tool — MoMo: 0373607456</p>
+                <p class="subtitle">Chạy 3 Tool Instagram song song — Bản quyền: TA Tool — MoMo: 0373607456</p>
             </div>
         </div>
         <div class="header-info">
@@ -32,13 +32,80 @@
 
     <main class="content">
         {% for key, info in tools.items() %}
-        <section class="tool-panel" data-tool="{{ key }}" style="--panel-color: {{ info.color }}">
-            <div class="tool-header">
-                <div>
-                    <h2>{{ info.name }}</h2>
-                    <p>{{ info.desc }}</p>
+        {% set safe_key = key | replace('.', '_') %}
+        <section class="tool-panel" data-tool="{{ key }}" data-safe="{{ safe_key }}" style="--panel-color: {{ info.color }}">
+
+            <!-- ============ CONFIG FORM ============ -->
+            <div class="config-form" id="form-{{ safe_key }}">
+                <div class="form-title">⚙️ CẤU HÌNH TOOL — {{ info.name }}</div>
+
+                <!-- Token XSMM -->
+                <div class="form-row">
+                    <label>🔑 Access Token XSMM:</label>
+                    <input type="text" class="cfg-input cfg-token" placeholder="Dán token XSMM vào đây (Bearer token)" autocomplete="off">
                 </div>
-                <div class="tool-actions">
+
+                <!-- Cookie Check (chỉ cho tool 2) -->
+                {% if key == 'xsmmigv5.2' %}
+                <div class="form-row">
+                    <label>🍪 Cookie Check Jobs (tùy chọn — cookie trình duyệt web):</label>
+                    <textarea class="cfg-input cfg-cookiecheck" rows="2" placeholder="Để trống nếu muốn dùng cookie của từng nick. Hoặc dán cookie web browser riêng..."></textarea>
+                </div>
+                {% endif %}
+
+                <!-- Danh sách cookie -->
+                <div class="form-row">
+                    <label>📋 Danh sách Cookie IG/FB <small>(mỗi dòng 1 nick — định dạng: <code>cookie</code> hoặc <code>cookie|proxy</code>)</small>:</label>
+                    <textarea class="cfg-input cfg-cookies" rows="6" placeholder="sessionid=abc123; csrftoken=xyz...&#10;sessionid=def456; csrftoken=uvw...|http://user:pass@ip:port&#10;..."></textarea>
+                </div>
+
+                <!-- Chọn jobs -->
+                <div class="form-row">
+                    <label>🎯 Chọn loại Jobs:</label>
+                    <div class="checkbox-group">
+                        <label class="cb-item"><input type="checkbox" class="cfg-job cfg-job-like" checked> 👍 Tym (Like)</label>
+                        <label class="cb-item"><input type="checkbox" class="cfg-job cfg-job-follow" checked> ➕ Follow</label>
+                        <label class="cb-item"><input type="checkbox" class="cfg-job cfg-job-comment"> 💬 Comment</label>
+                    </div>
+                </div>
+
+                <!-- Delay -->
+                <div class="form-row form-row-inline">
+                    <label>⏱️ Delay (giây):</label>
+                    <div class="inline-inputs">
+                        <span>Tym <input type="number" class="cfg-input cfg-delay-tym" value="10" min="1" style="width:70px"></span>
+                        <span>Follow <input type="number" class="cfg-input cfg-delay-follow" value="15" min="1" style="width:70px"></span>
+                        <span>Comment <input type="number" class="cfg-input cfg-delay-comment" value="20" min="10" style="width:70px"></span>
+                    </div>
+                </div>
+
+                <!-- Cấu hình luồng -->
+                <div class="form-row form-row-inline">
+                    <label>🔀 Đa luồng:</label>
+                    <div class="inline-inputs">
+                        <span>Số luồng tối đa <input type="number" class="cfg-input cfg-threads" value="10" min="1" max="50" style="width:70px"></span>
+                        <span>Jobs đổi nick <input type="number" class="cfg-input cfg-rotate" value="99999" min="1" style="width:90px"></span>
+                        <span>Chờ khi hết job <input type="number" class="cfg-input cfg-wait" value="150" min="10" style="width:80px"></span>
+                    </div>
+                </div>
+
+                <!-- Chỉ cho tool 3 -->
+                {% if key == '11223' %}
+                <div class="form-row form-row-inline">
+                    <label>🎬 Chế độ chạy (Tool 3):</label>
+                    <div class="inline-inputs">
+                        <select class="cfg-input cfg-mode" style="width:200px">
+                            <option value="1">1. Like (nhận xu ngay)</option>
+                            <option value="2">2. Follow (đủ 12 mới nhận)</option>
+                            <option value="3">3. Comment (nhận xu ngay)</option>
+                        </select>
+                        <span>Delay nhận xu <input type="number" class="cfg-input cfg-delaycoin" value="3" min="1" style="width:70px"></span>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Nút bấm -->
+                <div class="form-actions">
                     <button class="btn btn-start" data-tool="{{ key }}">
                         <span class="btn-icon">▶</span> Chạy Tool
                     </button>
@@ -54,22 +121,25 @@
                 </div>
             </div>
 
+            <!-- ============ SESSION INFO ============ -->
             <div class="session-info" data-tool="{{ key }}">
                 <span class="badge status-badge idle">● IDLE</span>
                 <span class="session-id"></span>
                 <span class="output-count">0 dòng</span>
             </div>
 
+            <!-- ============ TERMINAL ============ -->
             <div class="terminal-wrap">
                 <div class="terminal-header">
                     <div class="dots"><span></span><span></span><span></span></div>
                     <div class="term-title">{{ key }}.py — output</div>
                 </div>
-                <div class="terminal" id="term-{{ key }}"></div>
+                <div class="terminal" id="term-{{ safe_key }}"></div>
             </div>
 
+            <!-- ============ INPUT BAR (nhập tay khi cần) ============ -->
             <div class="input-bar">
-                <input type="text" class="stdin-input" placeholder="Nhập input cho tool (cookie / token / số nick / on-off / delay...). Nhấn Enter để gửi" data-tool="{{ key }}" disabled>
+                <input type="text" class="stdin-input" placeholder="Nhập input thủ công cho tool (nếu tool đang chờ nhập thêm). Nhấn Enter để gửi" data-tool="{{ key }}" disabled>
                 <button class="btn btn-send" data-tool="{{ key }}" disabled>Gửi ⏎</button>
             </div>
         </section>
