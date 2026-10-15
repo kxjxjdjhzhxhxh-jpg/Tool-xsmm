@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚀 TA TOOL WEB MANAGER</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="app">
+    <header class="header">
+        <div class="logo">
+            <span class="logo-icon">🚀</span>
+            <div>
+                <h1>TA TOOL WEB MANAGER</h1>
+                <p class="subtitle">Chạy 3 Tool Instagram — Bản quyền: TA Tool — MoMo: 0373607456</p>
+            </div>
+        </div>
+        <div class="header-info">
+            <div class="clock" id="clock">--:--:--</div>
+        </div>
+    </header>
+
+    <nav class="tabs">
+        {% for key, info in tools.items() %}
+        <button class="tab-btn" data-tool="{{ key }}" style="--tab-color: {{ info.color }}">
+            <span class="tab-dot"></span>
+            {{ info.name }}
+        </button>
+        {% endfor %}
+    </nav>
+
+    <main class="content">
+        {% for key, info in tools.items() %}
+        <section class="tool-panel" data-tool="{{ key }}" style="--panel-color: {{ info.color }}">
+            <div class="tool-header">
+                <div>
+                    <h2>{{ info.name }}</h2>
+                    <p>{{ info.desc }}</p>
+                </div>
+                <div class="tool-actions">
+                    <button class="btn btn-start" data-tool="{{ key }}">
+                        <span class="btn-icon">▶</span> Chạy Tool
+                    </button>
+                    <button class="btn btn-stop" data-tool="{{ key }}" disabled>
+                        <span class="btn-icon">⏹</span> Dừng
+                    </button>
+                    <button class="btn btn-clear" data-tool="{{ key }}" disabled>
+                        <span class="btn-icon">🧹</span> Xóa Log
+                    </button>
+                    <button class="btn btn-save" data-tool="{{ key }}" disabled>
+                        <span class="btn-icon">💾</span> Lưu Log
+                    </button>
+                </div>
+            </div>
+
+            <div class="session-info" data-tool="{{ key }}">
+                <span class="badge status-badge idle">● IDLE</span>
+                <span class="session-id"></span>
+                <span class="output-count">0 dòng</span>
+            </div>
+
+            <div class="terminal-wrap">
+                <div class="terminal-header">
+                    <div class="dots"><span></span><span></span><span></span></div>
+                    <div class="term-title">{{ key }}.py — output</div>
+                </div>
+                <div class="terminal" id="term-{{ key }}"></div>
+            </div>
+
+            <div class="input-bar">
+                <input type="text" class="stdin-input" placeholder="Nhập input cho tool (cookie / token / số nick / on-off / delay...). Nhấn Enter để gửi" data-tool="{{ key }}" disabled>
+                <button class="btn btn-send" data-tool="{{ key }}" disabled>Gửi ⏎</button>
+            </div>
+        </section>
+        {% endfor %}
+    </main>
+
+    <footer class="footer">
+        <span>© TA TOOL — Donate MoMo: 0373607456</span>
+        <span id="sessions-count">0 sessions</span>
+    </footer>
+</div>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
