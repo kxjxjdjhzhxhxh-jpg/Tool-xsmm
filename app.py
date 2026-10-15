@@ -22,7 +22,7 @@ TEMP_TOOLS_DIR = os.path.join(tempfile.gettempdir(), "ta_tool_embedded")
 os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
 
 # ============================================================================
-# ==================== TOOL 1: xsmmv3.2.py ==================================
+# ==================== TOOL 1: xsmmv3.2.py (CÓ SỐ LUỒNG) ====================
 # ============================================================================
 TOOL_CODE_XSMMV32 = r'''import os
 import sys
@@ -594,7 +594,19 @@ def main():
     xsmm_token = ""
     xu = 0
     username = "Unknown"
-    # Đọc token từ stdin (form web đã gửi sẵn)
+
+    # 👇 ĐỌC SỐ LUỒNG TỪ STDIN TRƯỚC
+    sys.stdout.write(f"{white} ⏩ {green}Số luồng chạy song song (1-50): {white}")
+    sys.stdout.flush()
+    try:
+        max_threads = int(input().strip())
+        if max_threads < 1: max_threads = 1
+        if max_threads > 50: max_threads = 50
+    except:
+        max_threads = 10
+    print(f"{green} ✅ Sẽ chạy tối đa {max_threads} nick song song{white}\n")
+
+    # Đọc token
     sys.stdout.write(f"{white} ⏩ {green}Access Token XSMM: {white}")
     sys.stdout.flush()
     xsmm_token = input().strip()
@@ -620,6 +632,7 @@ def main():
         luong = int(input().strip())
     except:
         luong = 1
+
     mangcookie = []
     thu = 1
     while len(mangcookie) < luong:
@@ -632,8 +645,11 @@ def main():
         if not cookie_str:
             continue
         mangcookie.append({"cookie": cookie_str, "proxy": proxy_str})
-        with open("ListccXSMM.json", "w", encoding="utf-8") as f:
-            json.dump(mangcookie, f)
+        try:
+            with open("ListccXSMM.json", "w", encoding="utf-8") as f:
+                json.dump(mangcookie, f)
+        except:
+            pass
         thu += 1
 
     dl = 150
@@ -667,6 +683,7 @@ def main():
                 if config_delays['tym'] < 1: config_delays['tym'] = 10
             except:
                 config_delays['tym'] = 10
+
         print(f"{yellow} ⏩ {blue}Chế độ Follow trên XSMM{pink} (on/off): {white}")
         sys.stdout.flush()
         chon_sub = input().strip().lower()
@@ -679,6 +696,7 @@ def main():
                 if config_delays['follow'] < 1: config_delays['follow'] = 15
             except:
                 config_delays['follow'] = 15
+
         print(f"{yellow} ⏩ {blue}Chế độ Comment trên XSMM{pink} (on/off): {white}")
         sys.stdout.flush()
         chon_cmt = input().strip().lower()
@@ -691,6 +709,7 @@ def main():
                 if config_delays['comment'] < 10: config_delays['comment'] = 20
             except:
                 config_delays['comment'] = 20
+
         if len(listnv) == 0:
             print(f"{red}Chọn tối thiểu 1 loại Job !\n")
         else:
@@ -699,13 +718,16 @@ def main():
     banner()
     print(f"{cyan} ✅ {cam}XSMM User    : {white}{username}")
     print(f"{cyan} ✅ {cam}Tổng số Nick: {white}{len(mangcookie)}")
-    print(f"{cyan} ✅ {cam}Số Luồng Chạy: {green}Tối đa 10 Nick song song cùng lúc{white}")
+    print(f"{cyan} ✅ {cam}Số Luồng Chạy: {green}Tối đa {max_threads} Nick song song cùng lúc{white}")
     print(f"{yellow} ┌────────────────────────────────────────────────────────┐{reset}\n")
-    with ThreadPoolExecutor(max_workers=10) as executor:
+
+    # 👇 SỬ DỤNG max_threads THAY VÌ 10
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:
         futures = [
             executor.submit(run_single_account, acc_data, listnv, config_delays, xsmm_token, dl, doi)
             for acc_data in mangcookie
         ]
+
     print(f"\n{pink} ⛔ {red}Tất cả các luồng đã hoàn thành hoặc gặp lỗi dừng lại.\n")
 
 if __name__ == "__main__":
@@ -1219,8 +1241,11 @@ def main():
             configdata = json.loads(access)
             if configdata and 'form_data' in configdata and configdata['form_data'].get('username'):
                 mangcookie.append({"cookie": cookie_str, "proxy": proxy_str, "profile": assigned_profile})
-                with open("ListccXSMM.json", "w", encoding="utf-8") as f:
-                    json.dump(mangcookie, f)
+                try:
+                    with open("ListccXSMM.json", "w", encoding="utf-8") as f:
+                        json.dump(mangcookie, f)
+                except:
+                    pass
                 thu += 1
             else:
                 print(f"{white} ⛔ {red}Cookie/Proxy lỗi, thử lại\n")
@@ -1288,15 +1313,6 @@ def main():
 
     print(f"\n{cyan}✅ Bắt đầu chạy {len(mangcookie)} nick - jobs: {listnv}{reset}\n")
 
-    jobs_since_rest = 0
-    jobs_since_feed = 0
-    target_jobs_to_rest = 999999
-    target_jobs_to_feed = 999999
-
-    def check_human_behavior(cookie, proxy, profile):
-        nonlocal jobs_since_rest, jobs_since_feed, target_jobs_to_rest, target_jobs_to_feed
-        pass
-
     while True:
         for l in range(len(mangcookie)-1, -1, -1):
             acc_data = mangcookie[l]
@@ -1321,8 +1337,11 @@ def main():
             if not is_live or not idfb:
                 print(f"{white} ⛔ {red}Cookie Die - Đổi nick\n")
                 mangcookie.pop(l)
-                with open("ListccXSMM.json", "w", encoding="utf-8") as f:
-                    json.dump(mangcookie, f)
+                try:
+                    with open("ListccXSMM.json", "w", encoding="utf-8") as f:
+                        json.dump(mangcookie, f)
+                except:
+                    pass
                 continue
 
             px_display = f" | Proxy: {proxy}" if proxy else ""
@@ -1897,7 +1916,7 @@ if __name__ == "__main__":
 EMBEDDED_TOOLS = {
     "xsmmv3.2": {
         "name": "XSMM Tool V3.2",
-        "desc": "Tool Instagram Auto Jobs - XSMM API (Multi-thread 10 luồng)",
+        "desc": "Tool Instagram Auto Jobs - XSMM API (Multi-thread với số luồng tùy chỉnh)",
         "color": "#00d4ff",
         "filename": "xsmmv3.2.py",
         "code": TOOL_CODE_XSMMV32,
@@ -2138,7 +2157,7 @@ def on_join(data):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print("=" * 60)
-    print(" 🚀 TA TOOL WEB MANAGER (Embedded)")
+    print(" 🚀 TA TOOL WEB MANAGER (Embedded + Custom Threads)")
     print(f" 📁 Temp tools: {TEMP_TOOLS_DIR}")
     print(f" 🌐 Port: {port}")
     print("=" * 60)
