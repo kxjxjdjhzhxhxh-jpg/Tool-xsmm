@@ -62,12 +62,10 @@ function setStatus(tool, status, sessionId = null) {
     if (stdin) stdin.disabled = !isRunning;
     if (sendBtn) sendBtn.disabled = !isRunning;
 
-    // Vô hiệu hóa form khi đang chạy
     const form = $(`#form-${tool.replace('.', '_')}`);
     if (form) form.querySelectorAll('input, textarea, select').forEach(el => el.disabled = isRunning);
 }
 
-// ================== BUILD INPUT SEQUENCE ==================
 function buildInputSequence(tool) {
     const token = (getCfg(tool, 'cfg-token')?.value || '').trim();
     const cookiesRaw = (getCfg(tool, 'cfg-cookies')?.value || '').trim();
@@ -75,7 +73,6 @@ function buildInputSequence(tool) {
     const delayTym = getCfg(tool, 'cfg-delay-tym')?.value || '10';
     const delayFollow = getCfg(tool, 'cfg-delay-follow')?.value || '15';
     const delayComment = getCfg(tool, 'cfg-delay-comment')?.value || '20';
-    const threads = getCfg(tool, 'cfg-threads')?.value || '10';
     const rotate = getCfg(tool, 'cfg-rotate')?.value || '99999';
     const wait = getCfg(tool, 'cfg-wait')?.value || '150';
     const jobLike = getCfg(tool, 'cfg-job-like')?.checked;
@@ -84,7 +81,6 @@ function buildInputSequence(tool) {
     const mode = getCfg(tool, 'cfg-mode')?.value || '1';
     const delayCoin = getCfg(tool, 'cfg-delaycoin')?.value || '3';
 
-    // Parse cookie list
     const cookieLines = cookiesRaw.split('\n').map(l => l.trim()).filter(l => l);
     const cookies = [];
     const proxies = [];
@@ -94,83 +90,61 @@ function buildInputSequence(tool) {
         proxies.push(parts[1] ? parts[1].trim() : '');
     }
 
-    const seq = []; // mỗi phần tử là 1 chuỗi gửi vào stdin
+    const seq = [];
 
-    if (tool === 'xsmmv3.2' || tool === 'xsmmigv5.2') {
-        // 1. Token XSMM (nếu có file log cũ sẽ hỏi Enter/No — ta luôn gửi 'no' để dùng token mới)
-        // Tool sẽ check "logXSMM.txt" tồn tại — trong môi trường mới không có => hỏi thẳng token
+    if (tool === 'xsmmv3.2') {
         seq.push(token);
-
-        // 2. Cookie Check (chỉ V5.2)
-        if (tool === 'xsmmigv5.2') {
-            if (cookieCheck) {
-                // Chọn [1] để thay cookie check mới
-                seq.push('1');
-                seq.push(cookieCheck);
-            } else {
-                // Chọn [0] để tắt cookie check riêng
-                seq.push('0');
-            }
-        }
-
-        // 3. Số nick muốn chạy
         seq.push(String(cookies.length));
-
-        // 4. Nhập từng cookie + proxy
         for (let i = 0; i < cookies.length; i++) {
             seq.push(cookies[i]);
             seq.push(proxies[i] || '');
         }
-
-        // 5. Delay / rotate / wait
-        if (cookies.length === 1) {
-            seq.push(wait); // Hỏi "dừng bao lâu?"
-        } else {
-            seq.push(rotate); // Hỏi "sau bao nhiêu job thì đổi nick"
-        }
-
-        // 6. Chọn jobs: on/off
+        if (cookies.length === 1) seq.push(wait);
+        else seq.push(rotate);
         seq.push(jobLike ? 'on' : 'off');
         if (jobLike) seq.push(delayTym);
-
         seq.push(jobFollow ? 'on' : 'off');
-        if (jobFollow) {
-            seq.push(delayFollow);
-            if (tool === 'xsmmigv5.2') seq.push('10'); // số job gom follow
-        }
-
+        if (jobFollow) seq.push(delayFollow);
         seq.push(jobComment ? 'on' : 'off');
         if (jobComment) seq.push(delayComment);
-
+    } else if (tool === 'xsmmigv5.2') {
+        seq.push(token);
+        if (cookieCheck) { seq.push('1'); seq.push(cookieCheck); }
+        else seq.push('0');
+        seq.push(String(cookies.length));
+        for (let i = 0; i < cookies.length; i++) {
+            seq.push(cookies[i]);
+            seq.push(proxies[i] || '');
+        }
+        seq.push(rotate);
+        seq.push(jobLike ? 'on' : 'off');
+        if (jobLike) { seq.push(delayTym); seq.push('3-5'); }
+        seq.push(jobFollow ? 'on' : 'off');
+        if (jobFollow) { seq.push(delayFollow); seq.push('4-6'); seq.push('10'); }
+        seq.push(jobComment ? 'on' : 'off');
+        if (jobComment) { seq.push(delayComment); seq.push('2-3'); }
     } else if (tool === '11223') {
-        // Tool 3: đơn giản
         seq.push(cookies[0] || '');
         seq.push(mode);
-        seq.push(delayTym);        // delay thao tác min
-        seq.push(String(parseInt(delayTym) + 5)); // delay thao tác max
-        seq.push(delayCoin);       // delay nhận xu min
-        seq.push(String(parseInt(delayCoin) + 2)); // delay nhận xu max
+        seq.push(delayTym);
+        seq.push(String(parseInt(delayTym) + 5));
+        seq.push(delayCoin);
+        seq.push(String(parseInt(delayCoin) + 2));
     }
-
     return seq.filter(s => s !== undefined && s !== null);
 }
 
-// ================== START ==================
+// START
 $$('.btn-start').forEach(btn => {
     btn.addEventListener('click', async () => {
         const tool = btn.dataset.tool;
-
-        // Validate
         const token = (getCfg(tool, 'cfg-token')?.value || '').trim();
         const cookiesRaw = (getCfg(tool, 'cfg-cookies')?.value || '').trim();
 
         if (tool !== '11223') {
             if (!token) { alert('⚠️ Vui lòng nhập Access Token XSMM!'); return; }
-            if (!cookiesRaw) { alert('⚠️ Vui lòng nhập ít nhất 1 cookie IG/FB!'); return; }
-        } else {
-            if (!cookiesRaw) { alert('⚠️ Vui lòng nhập Cookie Instagram!'); return; }
-            // Tool 3 hard-code token trong file, không hỏi
         }
+        if (!cookiesRaw) { alert('⚠️ Vui lòng nhập ít nhất 1 cookie!'); return; }
 
         btn.disabled = true;
         try {
@@ -185,22 +159,23 @@ $$('.btn-start').forEach(btn => {
             const term = getTerm(tool);
             if (term) {
                 term.innerHTML = '';
-                appendLine(term, `▶ Bắt đầu chạy tool [${tool}] — Session: ${data.session_id}`);
-                appendLine(term, `📝 Đang tự động gửi ${buildInputSequence(tool).length} dòng cấu hình vào stdin...`);
+                appendLine(term, `▶ Bắt đầu chạy [${tool}] — Session: ${data.session_id}`);
             }
 
-            // Gửi tuần tự từng input với delay nhỏ để tool kịp đọc
             const seq = buildInputSequence(tool);
             for (let i = 0; i < seq.length; i++) {
-                await new Promise(r => setTimeout(r, 350));
+                await new Promise(r => setTimeout(r, 400));
                 await fetch(`/api/input/${data.session_id}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: seq[i] })
                 });
-                if (term) appendLine(term, `> [auto] ${seq[i].length > 80 ? seq[i].substring(0, 80) + '...' : seq[i]}`, now());
+                if (term) {
+                    const short = seq[i].length > 70 ? seq[i].substring(0, 70) + '...' : seq[i];
+                    appendLine(term, `> [auto] ${short}`, now());
+                }
             }
-            if (term) appendLine(term, `✅ Đã gửi xong cấu hình. Tool bắt đầu chạy...`, now());
+            if (term) appendLine(term, `✅ Đã gửi xong cấu hình! Tool đang chạy...`, now());
 
             $(`.tab-btn[data-tool="${tool}"]`).click();
         } catch (e) {
@@ -210,7 +185,7 @@ $$('.btn-start').forEach(btn => {
     });
 });
 
-// ================== STOP ==================
+// STOP
 $$('.btn-stop').forEach(btn => {
     btn.addEventListener('click', async () => {
         const tool = btn.dataset.tool;
@@ -222,7 +197,7 @@ $$('.btn-stop').forEach(btn => {
     });
 });
 
-// ================== CLEAR ==================
+// CLEAR
 $$('.btn-clear').forEach(btn => {
     btn.addEventListener('click', () => {
         const tool = btn.dataset.tool;
@@ -233,20 +208,20 @@ $$('.btn-clear').forEach(btn => {
     });
 });
 
-// ================== SAVE ==================
+// SAVE
 $$('.btn-save').forEach(btn => {
     btn.addEventListener('click', async () => {
         const tool = btn.dataset.tool;
         const s = state[tool];
-        if (!s) { alert('Chưa có session để lưu!'); return; }
+        if (!s) { alert('Chưa có session!'); return; }
         const res = await fetch(`/api/save/${s.sessionId}`, { method: 'POST' });
         const data = await res.json();
-        if (data.ok) alert('Đã lưu log: ' + data.filename);
+        if (data.ok) alert('Đã lưu: ' + data.filename);
         else alert('Lỗi: ' + (data.error || ''));
     });
 });
 
-// ================== STDIN (nhập tay khi cần) ==================
+// STDIN
 function sendStdin(tool) {
     const input = $(`.stdin-input[data-tool="${tool}"]`); if (!input) return;
     const text = input.value;
@@ -255,8 +230,6 @@ function sendStdin(tool) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
-    }).then(r => r.json()).then(data => {
-        if (!data.ok) console.error('Lỗi gửi input:', data.error);
     });
     const term = getTerm(tool); if (term) appendLine(term, `> ${text}`, now());
     input.value = '';
@@ -266,10 +239,7 @@ $$('.stdin-input').forEach(inp => inp.addEventListener('keydown', e => {
     if (e.key === 'Enter') sendStdin(inp.dataset.tool);
 }));
 
-// ================== SOCKET ==================
-socket.on('connect', () => console.log('[SOCKET] connected:', socket.id));
-socket.on('disconnect', () => console.log('[SOCKET] disconnected'));
-
+// SOCKET
 socket.on('output', data => {
     const { session_id, line, ts } = data;
     const tool = Object.keys(state).find(k => state[k].sessionId === session_id);
@@ -297,13 +267,9 @@ socket.on('cleared', data => {
     if (tool) { const t = getTerm(tool); if (t) t.innerHTML = ''; }
 });
 
-fetch('/api/sessions').then(r => r.json()).then(list => {
-    const el = $('#sessions-count'); if (el) el.textContent = list.length + ' sessions';
-});
-
-// ================== LƯU CẤU HÌNH VÀO localStorage ==================
+// Auto save config
 const CFG_FIELDS = ['cfg-token', 'cfg-cookies', 'cfg-cookiecheck', 'cfg-delay-tym', 'cfg-delay-follow',
-                    'cfg-delay-comment', 'cfg-threads', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
+                    'cfg-delay-comment', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
 
 CFG_FIELDS.forEach(cls => {
     $$('.' + cls).forEach(input => {
@@ -316,7 +282,6 @@ CFG_FIELDS.forEach(cls => {
     });
 });
 
-// Checkbox jobs
 ['cfg-job-like', 'cfg-job-follow', 'cfg-job-comment'].forEach(cls => {
     $$('.' + cls).forEach(cb => {
         const tool = cb.closest('.tool-panel')?.dataset.tool;
@@ -326,4 +291,9 @@ CFG_FIELDS.forEach(cls => {
         if (saved !== null) cb.checked = saved === 'true';
         cb.addEventListener('change', () => localStorage.setItem(key, cb.checked));
     });
+});
+
+// Sessions count
+fetch('/api/sessions').then(r => r.json()).then(list => {
+    const el = $('#sessions-count'); if (el) el.textContent = list.length + ' sessions';
 });
