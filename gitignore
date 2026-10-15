@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.log
+.venv/
+venv/
+env/
+.env
+sessions/*.log
+ListccXSMM.json
+ListccXSMM.txt
+logXSMM.txt
+cookie_check_ig.txt
+pending_follow_tasks.json
+.DS_Store
