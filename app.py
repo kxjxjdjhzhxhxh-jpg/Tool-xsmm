@@ -11,7 +11,9 @@ from flask_socketio import SocketIO, emit, join_room
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'ta_tool_secret_2024'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+
+# ⚠️ Đã đổi từ eventlet -> threading để tương thích Python 3.13 trên Railway
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TOOLS_DIR = os.path.join(BASE_DIR, "tools")
@@ -280,4 +282,11 @@ if __name__ == '__main__':
     print(f" 📁 Tools dir: {TOOLS_DIR}")
     print(f" 🌐 Port: {port}")
     print("=" * 60)
-    socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
+    # allow_unsafe_werkzeug=True để chạy socketio với async_mode='threading'
+    socketio.run(
+        app,
+        host='0.0.0.0',
+        port=port,
+        debug=False,
+        allow_unsafe_werkzeug=True
+    )
