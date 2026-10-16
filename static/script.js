@@ -49,10 +49,10 @@ function setStatus(tool, status, sessionId = null) {
     badge.textContent = status === 'running' ? '● RUNNING' : status === 'stopped' ? '● STOPPED' : '● IDLE';
     if (sessionId !== null) getSessionIdEl(tool).textContent = sessionId ? `Session: ${sessionId}` : '';
     const isRunning = status === 'running';
-    getBtn(tool, 'start').disabled = isRunning;
-    getBtn(tool, 'stop').disabled = !isRunning;
-    getBtn(tool, 'clear').disabled = false;
-    getBtn(tool, 'save').disabled = false;
+    const startBtn = getBtn(tool, 'start'); if (startBtn) startBtn.disabled = isRunning;
+    const stopBtn = getBtn(tool, 'stop'); if (stopBtn) stopBtn.disabled = !isRunning;
+    const clearBtn = getBtn(tool, 'clear'); if (clearBtn) clearBtn.disabled = false;
+    const saveBtn = getBtn(tool, 'save'); if (saveBtn) saveBtn.disabled = false;
     const stdin = $(`.stdin-input[data-tool="${tool}"]`);
     const sendBtn = $(`.btn-send[data-tool="${tool}"]`);
     if (stdin) stdin.disabled = !isRunning;
@@ -78,8 +78,7 @@ function buildInputSequence(tool) {
     const delayCoin = getCfg(tool, 'cfg-delaycoin')?.value || '3';
 
     const cookieLines = cookiesRaw.split('\n').map(l => l.trim()).filter(l => l);
-    const cookies = [];
-    const proxies = [];
+    const cookies = [], proxies = [];
     for (const line of cookieLines) {
         const parts = line.split('|');
         cookies.push(parts[0].trim());
@@ -92,34 +91,20 @@ function buildInputSequence(tool) {
         seq.push(threads);
         seq.push(token);
         seq.push(String(cookies.length));
-        for (let i = 0; i < cookies.length; i++) {
-            seq.push(cookies[i]);
-            seq.push(proxies[i] || '');
-        }
-        if (cookies.length === 1) seq.push(wait);
-        else seq.push(rotate);
-        seq.push(jobLike ? 'on' : 'off');
-        if (jobLike) seq.push(delayTym);
-        seq.push(jobFollow ? 'on' : 'off');
-        if (jobFollow) seq.push(delayFollow);
-        seq.push(jobComment ? 'on' : 'off');
-        if (jobComment) seq.push(delayComment);
+        for (let i = 0; i < cookies.length; i++) { seq.push(cookies[i]); seq.push(proxies[i] || ''); }
+        if (cookies.length === 1) seq.push(wait); else seq.push(rotate);
+        seq.push(jobLike ? 'on' : 'off'); if (jobLike) seq.push(delayTym);
+        seq.push(jobFollow ? 'on' : 'off'); if (jobFollow) seq.push(delayFollow);
+        seq.push(jobComment ? 'on' : 'off'); if (jobComment) seq.push(delayComment);
     } else if (tool === 'xsmmigv5.2') {
         seq.push(token);
-        if (cookieCheck) { seq.push('1'); seq.push(cookieCheck); }
-        else seq.push('0');
+        if (cookieCheck) { seq.push('1'); seq.push(cookieCheck); } else seq.push('0');
         seq.push(String(cookies.length));
-        for (let i = 0; i < cookies.length; i++) {
-            seq.push(cookies[i]);
-            seq.push(proxies[i] || '');
-        }
+        for (let i = 0; i < cookies.length; i++) { seq.push(cookies[i]); seq.push(proxies[i] || ''); }
         seq.push(rotate);
-        seq.push(jobLike ? 'on' : 'off');
-        if (jobLike) { seq.push(delayTym); seq.push('3-5'); }
-        seq.push(jobFollow ? 'on' : 'off');
-        if (jobFollow) { seq.push(delayFollow); seq.push('4-6'); seq.push('10'); }
-        seq.push(jobComment ? 'on' : 'off');
-        if (jobComment) { seq.push(delayComment); seq.push('2-3'); }
+        seq.push(jobLike ? 'on' : 'off'); if (jobLike) { seq.push(delayTym); seq.push('3-5'); }
+        seq.push(jobFollow ? 'on' : 'off'); if (jobFollow) { seq.push(delayFollow); seq.push('4-6'); seq.push('10'); }
+        seq.push(jobComment ? 'on' : 'off'); if (jobComment) { seq.push(delayComment); seq.push('2-3'); }
     } else if (tool === '11223') {
         seq.push(cookies[0] || '');
         seq.push(mode);
@@ -136,44 +121,49 @@ $$('.btn-start').forEach(btn => {
         const tool = btn.dataset.tool;
         const token = (getCfg(tool, 'cfg-token')?.value || '').trim();
         const cookiesRaw = (getCfg(tool, 'cfg-cookies')?.value || '').trim();
-        if (tool !== '11223') {
-            if (!token) { alert('⚠️ Vui lòng nhập Access Token XSMM!'); return; }
+        const hasForm = !!getCfg(tool, 'cfg-cookies');
+        if (hasForm) {
+            if (tool === 'xsmmv3.2' || tool === 'xsmmigv5.2') {
+                if (!token) { alert('⚠️ Nhập Access Token XSMM!'); return; }
+            }
+            if (!cookiesRaw) { alert('⚠️ Nhập ít nhất 1 cookie!'); return; }
         }
-        if (!cookiesRaw) { alert('⚠️ Vui lòng nhập ít nhất 1 cookie!'); return; }
         btn.disabled = true;
         try {
             const res = await fetch(`/api/start/${tool}`, { method: 'POST' });
             const data = await res.json();
-            if (!data.ok) { alert('Lỗi: ' + (data.error || 'Không rõ')); btn.disabled = false; return; }
+            if (!data.ok) { alert('Lỗi: ' + (data.error || '')); btn.disabled = false; return; }
             state[tool] = { sessionId: data.session_id, status: 'running' };
             setStatus(tool, 'running', data.session_id);
             socket.emit('join', { session_id: data.session_id });
             const term = getTerm(tool);
-            if (term) { term.innerHTML = ''; appendLine(term, `▶ Bắt đầu chạy [${tool}] — Session: ${data.session_id}`); }
-            const seq = buildInputSequence(tool);
-            for (let i = 0; i < seq.length; i++) {
-                await new Promise(r => setTimeout(r, 400));
-                await fetch(`/api/input/${data.session_id}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: seq[i] })
-                });
-                if (term) {
-                    const short = seq[i].length > 70 ? seq[i].substring(0, 70) + '...' : seq[i];
-                    appendLine(term, `> [auto] ${short}`, now());
+            if (term) { term.innerHTML = ''; appendLine(term, `▶ Bắt đầu [${tool}] — Session: ${data.session_id}`); }
+            if (hasForm) {
+                const seq = buildInputSequence(tool);
+                for (let i = 0; i < seq.length; i++) {
+                    await new Promise(r => setTimeout(r, 400));
+                    await fetch(`/api/input/${data.session_id}`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: seq[i] })
+                    });
+                    if (term) {
+                        const short = seq[i].length > 70 ? seq[i].substring(0, 70) + '...' : seq[i];
+                        appendLine(term, `> [auto] ${short}`, now());
+                    }
                 }
+                if (term) appendLine(term, `✅ Đã gửi cấu hình! Tool đang chạy...`, now());
+            } else {
+                if (term) appendLine(term, `⚠️ Tool này cần nhập liệu thủ công qua ô input bên dưới.`, now());
             }
-            if (term) appendLine(term, `✅ Đã gửi xong cấu hình! Tool đang chạy...`, now());
             $(`.tab-btn[data-tool="${tool}"]`).click();
-        } catch (e) { alert('Lỗi kết nối: ' + e.message); btn.disabled = false; }
+        } catch (e) { alert('Lỗi: ' + e.message); btn.disabled = false; }
     });
 });
 
 $$('.btn-stop').forEach(btn => {
     btn.addEventListener('click', async () => {
-        const tool = btn.dataset.tool;
-        const s = state[tool]; if (!s) return;
-        if (!confirm('Dừng tool này?')) return;
+        const tool = btn.dataset.tool; const s = state[tool]; if (!s) return;
+        if (!confirm('Dừng tool?')) return;
         await fetch(`/api/stop/${s.sessionId}`, { method: 'POST' });
         setStatus(tool, 'stopped');
     });
@@ -184,29 +174,25 @@ $$('.btn-clear').forEach(btn => {
         const tool = btn.dataset.tool;
         const t = getTerm(tool); if (t) t.innerHTML = '';
         const c = getOutputCount(tool); if (c) c.textContent = '0 dòng';
-        const s = state[tool];
-        if (s) fetch(`/api/clear/${s.sessionId}`, { method: 'POST' });
+        const s = state[tool]; if (s) fetch(`/api/clear/${s.sessionId}`, { method: 'POST' });
     });
 });
 
 $$('.btn-save').forEach(btn => {
     btn.addEventListener('click', async () => {
-        const tool = btn.dataset.tool;
-        const s = state[tool]; if (!s) { alert('Chưa có session!'); return; }
+        const tool = btn.dataset.tool; const s = state[tool];
+        if (!s) { alert('Chưa có session!'); return; }
         const res = await fetch(`/api/save/${s.sessionId}`, { method: 'POST' });
         const data = await res.json();
-        if (data.ok) alert('Đã lưu: ' + data.filename);
-        else alert('Lỗi: ' + (data.error || ''));
+        if (data.ok) alert('Đã lưu: ' + data.filename); else alert('Lỗi: ' + (data.error || ''));
     });
 });
 
 function sendStdin(tool) {
     const input = $(`.stdin-input[data-tool="${tool}"]`); if (!input) return;
-    const text = input.value;
-    const s = state[tool]; if (!s || !s.sessionId) return;
+    const text = input.value; const s = state[tool]; if (!s || !s.sessionId) return;
     fetch(`/api/input/${s.sessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
     });
     const term = getTerm(tool); if (term) appendLine(term, `> ${text}`, now());
@@ -223,8 +209,7 @@ socket.on('output', data => {
     if (!tool) return;
     const term = getTerm(tool); if (!term) return;
     appendLine(term, line, ts);
-    const outCount = getOutputCount(tool);
-    if (outCount) outCount.textContent = term.children.length + ' dòng';
+    const oc = getOutputCount(tool); if (oc) oc.textContent = term.children.length + ' dòng';
 });
 
 socket.on('status', data => {
@@ -246,7 +231,6 @@ socket.on('cleared', data => {
 
 const CFG_FIELDS = ['cfg-token', 'cfg-cookies', 'cfg-cookiecheck', 'cfg-delay-tym', 'cfg-delay-follow',
                     'cfg-delay-comment', 'cfg-threads', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
-
 CFG_FIELDS.forEach(cls => {
     $$('.' + cls).forEach(input => {
         const tool = input.closest('.tool-panel')?.dataset.tool;
@@ -257,7 +241,6 @@ CFG_FIELDS.forEach(cls => {
         input.addEventListener('input', () => localStorage.setItem(key, input.value));
     });
 });
-
 ['cfg-job-like', 'cfg-job-follow', 'cfg-job-comment'].forEach(cls => {
     $$('.' + cls).forEach(cb => {
         const tool = cb.closest('.tool-panel')?.dataset.tool;
