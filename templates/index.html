@@ -7,9 +7,6 @@
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-<!-- Canvas hiệu ứng: tia sét + tim + hoa rơi -->
-<canvas id="fx-canvas"></canvas>
-
 <div class="app">
     <header class="header">
         <div class="logo">
@@ -44,16 +41,17 @@
         {% set safe_key = key | replace('.', '_') %}
         <section class="tool-panel" data-tool="{{ key }}" data-safe="{{ safe_key }}" style="--panel-color: {{ info.color }}">
 
+            <!-- Canvas hiệu ứng CHO FORM -->
+            <canvas class="fx-canvas-form"></canvas>
+
             <div class="config-form" id="form-{{ safe_key }}">
                 <div class="form-title">⚙️ CẤU HÌNH — {{ info.name }}</div>
 
-                <!-- Token XSMM (cho cả 3 tool) -->
                 <div class="form-row">
                     <label>🔑 Access Token XSMM:</label>
                     <input type="text" class="cfg-input cfg-token" placeholder="Dán token XSMM (Bearer token)" autocomplete="off">
                 </div>
 
-                <!-- Cookie Check chỉ cho V5.2 -->
                 {% if key == 'xsmmigv5.2' %}
                 <div class="form-row">
                     <label>🍪 Cookie Check Jobs (tùy chọn):</label>
@@ -61,13 +59,11 @@
                 </div>
                 {% endif %}
 
-                <!-- Cookie list cho cả 3 tool -->
                 <div class="form-row">
                     <label>📋 Danh sách Cookie IG/FB <small>(mỗi dòng 1 nick: <code>cookie</code> hoặc <code>cookie|proxy</code>)</small>:</label>
                     <textarea class="cfg-input cfg-cookies" rows="6" placeholder="sessionid=abc; csrftoken=xyz&#10;sessionid=def; csrftoken=uvw|http://user:pass@1.2.3.4:8080"></textarea>
                 </div>
 
-                <!-- Chọn jobs -->
                 <div class="form-row">
                     <label>🎯 Chọn loại Jobs:</label>
                     <div class="checkbox-group">
@@ -77,7 +73,6 @@
                     </div>
                 </div>
 
-                <!-- Delay -->
                 <div class="form-row form-row-inline">
                     <label>⏱️ Delay (giây):</label>
                     <div class="inline-inputs">
@@ -87,7 +82,6 @@
                     </div>
                 </div>
 
-                <!-- Chỉ Tool 1 có số luồng -->
                 {% if key == 'xsmmv3.2' %}
                 <div class="form-row form-row-inline">
                     <label>🔀 Cấu hình luồng:</label>
@@ -108,7 +102,6 @@
                 </div>
                 {% endif %}
 
-                <!-- Tool 3 (11223) - chọn chế độ -->
                 {% if key == '11223' %}
                 <div class="form-row form-row-inline">
                     <label>🎬 Chế độ (Tool 3):</label>
@@ -143,6 +136,8 @@
                     <div class="term-title">{{ key }}.py — output</div>
                 </div>
                 <div class="terminal" id="term-{{ safe_key }}"></div>
+                <!-- Canvas hiệu ứng CHO TERMINAL -->
+                <canvas class="fx-canvas-term"></canvas>
             </div>
 
             <div class="input-bar">
