@@ -13,7 +13,7 @@
             <span class="logo-icon">🚀</span>
             <div>
                 <h1>TA TOOL WEB MANAGER</h1>
-                <p class="subtitle">3 Tool Instagram Auto Jobs — TA Tool — MoMo: 0373607456</p>
+                <p class="subtitle">3 Tool IG XSMM + 2 Tool FB — TA Tool — MoMo: 0373607456</p>
             </div>
         </div>
         <div class="header-info">
@@ -22,7 +22,7 @@
                 <label for="theme-color" title="Đổi màu chủ đạo">
                     <span class="picker-icon">🎨</span>
                 </label>
-                <input type="color" id="theme-color" value="#00d4ff" title="Đổi màu chủ đạo">
+                <input type="color" id="theme-color" value="#ec4899" title="Đổi màu chủ đạo">
             </div>
         </div>
     </header>
@@ -34,14 +34,22 @@
             {{ info.name }}
         </button>
         {% endfor %}
+        <button class="tab-btn" data-tool="fb_regpage" style="--tab-color: #1877f2">
+            <span class="tab-dot"></span>
+            FB Reg Page
+        </button>
+        <button class="tab-btn" data-tool="fb_chuyenpage" style="--tab-color: #8b5cf6">
+            <span class="tab-dot"></span>
+            FB Chuyển Page
+        </button>
     </nav>
 
     <main class="content">
+        <!-- 3 TOOL IG -->
         {% for key, info in tools.items() %}
         {% set safe_key = key | replace('.', '_') %}
         <section class="tool-panel" data-tool="{{ key }}" data-safe="{{ safe_key }}" style="--panel-color: {{ info.color }}">
 
-            <!-- Canvas hiệu ứng CHO FORM -->
             <canvas class="fx-canvas-form"></canvas>
 
             <div class="config-form" id="form-{{ safe_key }}">
@@ -136,7 +144,6 @@
                     <div class="term-title">{{ key }}.py — output</div>
                 </div>
                 <div class="terminal" id="term-{{ safe_key }}"></div>
-                <!-- Canvas hiệu ứng CHO TERMINAL -->
                 <canvas class="fx-canvas-term"></canvas>
             </div>
 
@@ -146,6 +153,90 @@
             </div>
         </section>
         {% endfor %}
+
+        <!-- TOOL 4: FB REG PAGE -->
+        <section class="tool-panel" data-tool="fb_regpage" data-safe="fb_regpage" style="--panel-color: #1877f2">
+            <canvas class="fx-canvas-form"></canvas>
+            <div class="config-form">
+                <div class="form-title">📘 FB REG PAGE — Tạo Page Facebook</div>
+
+                <div class="form-row">
+                    <label>🍪 Cookie Facebook <small>(dạng: c_user=...; xs=...;)</small>:</label>
+                    <textarea class="cfg-input" id="fb_reg_cookie" rows="3" placeholder="c_user=1000xxx; xs=...; datr=...;"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <label>📝 Tên Page cần tạo:</label>
+                    <input type="text" class="cfg-input" id="fb_reg_name" placeholder="VD: Shop Quần Áo ABC" autocomplete="off">
+                </div>
+
+                <div class="form-row form-row-inline">
+                    <label>📂 Category ID:</label>
+                    <div class="inline-inputs">
+                        <span><input type="text" class="cfg-input" id="fb_reg_cat" value="2200" style="width:100px"></span>
+                        <span style="color:var(--text-dim);font-size:11px">(2200=Brand, 1807=Store, 2213=Personal Blog...)</span>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-start" id="btn_fb_reg"><span class="btn-icon">▶</span> Tạo Page</button>
+                </div>
+            </div>
+
+            <div class="terminal-wrap">
+                <div class="terminal-header">
+                    <div class="dots"><span></span><span></span><span></span></div>
+                    <div class="term-title">FB Reg Page — output</div>
+                </div>
+                <div class="terminal" id="term-fb_regpage"></div>
+                <canvas class="fx-canvas-term"></canvas>
+            </div>
+        </section>
+
+        <!-- TOOL 5: FB CHUYỂN PAGE -->
+        <section class="tool-panel" data-tool="fb_chuyenpage" data-safe="fb_chuyenpage" style="--panel-color: #8b5cf6">
+            <canvas class="fx-canvas-form"></canvas>
+            <div class="config-form">
+                <div class="form-title">📘 FB CHUYỂN PAGE — Chuyển quyền QTV</div>
+
+                <div class="form-row">
+                    <label>🍪 Cookie Nick Chuyển <small>(đang cầm Page)</small>:</label>
+                    <textarea class="cfg-input" id="fb_chuyen_cookie" rows="3" placeholder="c_user=1000xxx; xs=...;"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <label>🔒 Mật khẩu Nick Chuyển <small>(để xác thực)</small>:</label>
+                    <input type="password" class="cfg-input" id="fb_chuyen_pass" placeholder="Mật khẩu FB" autocomplete="off">
+                </div>
+
+                <div class="form-row form-row-inline">
+                    <label>🆔 Page ID:</label>
+                    <div class="inline-inputs">
+                        <span><input type="text" class="cfg-input" id="fb_chuyen_pageid" placeholder="1000xxx" style="width:180px"></span>
+                    </div>
+                </div>
+
+                <div class="form-row form-row-inline">
+                    <label>👤 UID Nhận:</label>
+                    <div class="inline-inputs">
+                        <span><input type="text" class="cfg-input" id="fb_chuyen_uid" placeholder="1000xxx" style="width:180px"></span>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button class="btn btn-start" id="btn_fb_chuyen"><span class="btn-icon">▶</span> Chuyển Page</button>
+                </div>
+            </div>
+
+            <div class="terminal-wrap">
+                <div class="terminal-header">
+                    <div class="dots"><span></span><span></span><span></span></div>
+                    <div class="term-title">FB Chuyển Page — output</div>
+                </div>
+                <div class="terminal" id="term-fb_chuyenpage"></div>
+                <canvas class="fx-canvas-term"></canvas>
+            </div>
+        </section>
     </main>
 
     <footer class="footer">
