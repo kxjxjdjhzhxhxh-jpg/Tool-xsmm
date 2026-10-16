@@ -7,11 +7,13 @@ function now() { return new Date().toLocaleTimeString('vi-VN', { hour12: false }
 function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 // ================== HIỆU ỨNG CANVAS: SÉT + TIM + HOA ==================
+// 👇 CHỈ CHẠY KHI BẤM "CHẠY TOOL"
 (function initEffects() {
     const canvas = document.getElementById('fx-canvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let W, H;
+    let EFFECTS_ACTIVE = false; // 👈 Cờ bật/tắt
 
     function resize() {
         W = canvas.width = window.innerWidth;
@@ -20,20 +22,18 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
     resize();
     window.addEventListener('resize', resize);
 
-    // Lấy màu accent từ CSS
     let ACCENT = '#00d4ff';
     function getAccent() {
         return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#00d4ff';
     }
     setInterval(() => { ACCENT = getAccent(); }, 1000);
 
-    // ==== HOA RƠI ====
+    // HOA
     const flowers = [];
     const FLOWER_COLORS = ['#ff6b9d', '#ffd93d', '#a78bfa', '#ff8fab', '#f9a8d4'];
     function createFlower() {
         return {
-            x: Math.random() * W,
-            y: -30,
+            x: Math.random() * W, y: -30,
             size: 8 + Math.random() * 12,
             speedY: 0.5 + Math.random() * 1,
             speedX: (Math.random() - 0.5) * 0.8,
@@ -43,18 +43,20 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
             type: Math.random() < 0.5 ? 'flower' : 'petal'
         };
     }
-    for (let i = 0; i < 15; i++) {
-        const f = createFlower();
-        f.y = Math.random() * H;
-        flowers.push(f);
+    function spawnFlowers() {
+        flowers.length = 0;
+        for (let i = 0; i < 15; i++) {
+            const f = createFlower();
+            f.y = Math.random() * H;
+            flowers.push(f);
+        }
     }
 
-    // ==== TIM RƠI ====
+    // TIM
     const hearts = [];
     function createHeart() {
         return {
-            x: Math.random() * W,
-            y: -30,
+            x: Math.random() * W, y: -30,
             size: 8 + Math.random() * 10,
             speedY: 0.8 + Math.random() * 1.2,
             speedX: (Math.random() - 0.5) * 0.6,
@@ -63,13 +65,16 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
             pulse: Math.random() * Math.PI * 2
         };
     }
-    for (let i = 0; i < 10; i++) {
-        const h = createHeart();
-        h.y = Math.random() * H;
-        hearts.push(h);
+    function spawnHearts() {
+        hearts.length = 0;
+        for (let i = 0; i < 10; i++) {
+            const h = createHeart();
+            h.y = Math.random() * H;
+            hearts.push(h);
+        }
     }
 
-    // ==== TIA SÉT ====
+    // SÉT
     const lightningBolts = [];
     function createLightning() {
         const startX = Math.random() * W;
@@ -81,16 +86,16 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
             x += (Math.random() - 0.5) * 80;
             y += 15 + Math.random() * 25;
         }
-        return {
-            segments,
-            life: 1,
-            fadeSpeed: 0.02 + Math.random() * 0.03,
-            width: 1.5 + Math.random() * 2,
-            branch: Math.random() < 0.3
-        };
+        return { segments, life: 1, fadeSpeed: 0.02 + Math.random() * 0.03,
+                 width: 1.5 + Math.random() * 2, branch: Math.random() < 0.3 };
+    }
+    function triggerLightning() {
+        // Chớp 3 tia liên tiếp
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => lightningBolts.push(createLightning()), i * 150);
+        }
     }
 
-    // Vẽ 1 tia sét
     function drawLightning(bolt, color) {
         if (bolt.segments.length < 2) return;
         ctx.save();
@@ -101,17 +106,13 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
         ctx.shadowColor = color;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-
-        // Glow ngoài
         ctx.beginPath();
         ctx.moveTo(bolt.segments[0].x, bolt.segments[0].y);
         for (let i = 1; i < bolt.segments.length; i++) {
             ctx.lineTo(bolt.segments[i].x, bolt.segments[i].y);
         }
         ctx.stroke();
-
-        // Lõi trắng
-        ctx.strokeStyle = 'rgba(255, 255, 255, ' + bolt.life + ')';
+        ctx.strokeStyle = 'rgba(255,255,255,' + bolt.life + ')';
         ctx.lineWidth = bolt.width * 0.4;
         ctx.shadowBlur = 0;
         ctx.beginPath();
@@ -120,8 +121,6 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
             ctx.lineTo(bolt.segments[i].x, bolt.segments[i].y);
         }
         ctx.stroke();
-
-        // Nhánh
         if (bolt.branch && bolt.segments.length > 3) {
             const idx = Math.floor(bolt.segments.length / 2);
             const bp = bolt.segments[idx];
@@ -142,14 +141,12 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
         ctx.restore();
     }
 
-    // Vẽ hoa
     function drawFlower(f) {
         ctx.save();
         ctx.translate(f.x, f.y);
         ctx.rotate(f.rot);
         ctx.globalAlpha = 0.85;
         if (f.type === 'petal') {
-            // Cánh hoa đơn
             ctx.fillStyle = f.color;
             ctx.shadowBlur = 10;
             ctx.shadowColor = f.color;
@@ -157,7 +154,6 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
             ctx.ellipse(0, 0, f.size, f.size * 0.5, 0, 0, Math.PI * 2);
             ctx.fill();
         } else {
-            // Hoa 5 cánh
             ctx.fillStyle = f.color;
             ctx.shadowBlur = 12;
             ctx.shadowColor = f.color;
@@ -169,7 +165,6 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
                 ctx.fill();
                 ctx.restore();
             }
-            // Nhụy vàng
             ctx.fillStyle = '#ffd93d';
             ctx.shadowColor = '#ffd93d';
             ctx.beginPath();
@@ -179,7 +174,6 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
         ctx.restore();
     }
 
-    // Vẽ tim
     function drawHeart(h) {
         ctx.save();
         ctx.translate(h.x, h.y);
@@ -198,59 +192,57 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
         ctx.restore();
     }
 
-    // Vòng lặp
     function loop() {
         ctx.clearRect(0, 0, W, H);
-
-        // Vẽ hoa
-        for (const f of flowers) {
-            f.y += f.speedY;
-            f.x += f.speedX + Math.sin(f.y * 0.01) * 0.3;
-            f.rot += f.rotSpeed;
-            if (f.y > H + 40) {
-                Object.assign(f, createFlower());
+        // 👇 CHỈ VẼ KHI EFFECTS_ACTIVE = true
+        if (EFFECTS_ACTIVE) {
+            for (const f of flowers) {
+                f.y += f.speedY;
+                f.x += f.speedX + Math.sin(f.y * 0.01) * 0.3;
+                f.rot += f.rotSpeed;
+                if (f.y > H + 40) Object.assign(f, createFlower());
+                drawFlower(f);
             }
-            drawFlower(f);
-        }
-
-        // Vẽ tim
-        for (const h of hearts) {
-            h.y += h.speedY;
-            h.x += h.speedX + Math.sin(h.y * 0.02) * 0.4;
-            h.pulse += 0.08;
-            if (h.y > H + 40) {
-                Object.assign(h, createHeart());
+            for (const h of hearts) {
+                h.y += h.speedY;
+                h.x += h.speedX + Math.sin(h.y * 0.02) * 0.4;
+                h.pulse += 0.08;
+                if (h.y > H + 40) Object.assign(h, createHeart());
+                drawHeart(h);
             }
-            drawHeart(h);
-        }
-
-        // Vẽ sét
-        for (let i = lightningBolts.length - 1; i >= 0; i--) {
-            const bolt = lightningBolts[i];
-            bolt.life -= bolt.fadeSpeed;
-            if (bolt.life <= 0) {
-                lightningBolts.splice(i, 1);
-                continue;
+            for (let i = lightningBolts.length - 1; i >= 0; i--) {
+                const bolt = lightningBolts[i];
+                bolt.life -= bolt.fadeSpeed;
+                if (bolt.life <= 0) { lightningBolts.splice(i, 1); continue; }
+                drawLightning(bolt, ACCENT);
             }
-            drawLightning(bolt, ACCENT);
+            // Thỉnh thoảng có tia sét ngẫu nhiên khi đang chạy
+            if (Math.random() < 0.015 && lightningBolts.length < 2) {
+                lightningBolts.push(createLightning());
+            }
         }
-        // Random tạo tia sét mới
-        if (Math.random() < 0.01 && lightningBolts.length < 3) {
-            lightningBolts.push(createLightning());
-        }
-
         requestAnimationFrame(loop);
     }
     loop();
 
-    // Tạo sét ngay khi bấm nút (tương tác)
-    document.addEventListener('click', (e) => {
-        if (e.target.closest('.btn-start') || e.target.closest('.btn-stop')) {
-            for (let i = 0; i < 3; i++) {
-                setTimeout(() => lightningBolts.push(createLightning()), i * 150);
-            }
+    // ================== API CHO BÊN NGOÀI ==================
+    window.FX = {
+        start: function () {
+            EFFECTS_ACTIVE = true;
+            spawnFlowers();
+            spawnHearts();
+            triggerLightning();   // 3 tia đầu
+        },
+        stop: function () {
+            EFFECTS_ACTIVE = false;
+            flowers.length = 0;
+            hearts.length = 0;
+            lightningBolts.length = 0;
+        },
+        lightning: function () {
+            triggerLightning();
         }
-    });
+    };
 })();
 
 // ================== COLOR PICKER ==================
@@ -288,7 +280,6 @@ function appendLine(termEl, line, ts = null) {
 
 setInterval(() => { const el = $('#clock'); if (el) el.textContent = now(); }, 1000);
 
-// Tab switch
 $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const tool = btn.dataset.tool;
@@ -370,7 +361,6 @@ function buildInputSequence(tool) {
         seq.push(jobFollow ? 'on' : 'off'); if (jobFollow) { seq.push(delayFollow); seq.push('4-6'); seq.push('10'); }
         seq.push(jobComment ? 'on' : 'off'); if (jobComment) { seq.push(delayComment); seq.push('2-3'); }
     } else if (tool === '11223') {
-        // Tool 11223 giờ: token -> cookie -> mode -> delay min/max -> coin min/max
         seq.push(token);
         seq.push(cookies[0] || '');
         seq.push(mode);
@@ -382,7 +372,7 @@ function buildInputSequence(tool) {
     return seq.filter(s => s !== undefined && s !== null);
 }
 
-// START
+// START — 👇 BẬT HIỆU ỨNG
 $$('.btn-start').forEach(btn => {
     btn.addEventListener('click', async () => {
         const tool = btn.dataset.tool;
@@ -401,6 +391,9 @@ $$('.btn-start').forEach(btn => {
             state[tool] = { sessionId: data.session_id, status: 'running' };
             setStatus(tool, 'running', data.session_id);
             socket.emit('join', { session_id: data.session_id });
+
+            // 👇 BẬT HIỆU ỨNG KHI BẮT ĐẦU CHẠY
+            if (window.FX) window.FX.start();
 
             const term = getTerm(tool);
             if (term) {
@@ -427,7 +420,7 @@ $$('.btn-start').forEach(btn => {
     });
 });
 
-// STOP
+// STOP — 👇 TẮT HIỆU ỨNG
 $$('.btn-stop').forEach(btn => {
     btn.addEventListener('click', async () => {
         const tool = btn.dataset.tool;
@@ -436,6 +429,8 @@ $$('.btn-stop').forEach(btn => {
         if (!confirm('Dừng tool này?')) return;
         await fetch(`/api/stop/${s.sessionId}`, { method: 'POST' });
         setStatus(tool, 'stopped');
+        // 👇 TẮT HIỆU ỨNG KHI DỪNG
+        if (window.FX) window.FX.stop();
     });
 });
 
@@ -505,6 +500,10 @@ socket.on('status', data => {
         setStatus(tool, 'stopped');
         const term = getTerm(tool);
         if (term) appendLine(term, `■ ${message || 'Đã dừng'} (exit: ${return_code ?? '?'})`);
+        // 👇 KHI TOOL TỰ KẾT THÚC → TẮT HIỆU ỨNG
+        // Nhưng chỉ tắt nếu KHÔNG còn tool nào đang chạy
+        const anyRunning = Object.values(state).some(s => s.status === 'running');
+        if (!anyRunning && window.FX) window.FX.stop();
     }
 });
 
@@ -513,7 +512,6 @@ socket.on('cleared', data => {
     if (tool) { const t = getTerm(tool); if (t) t.innerHTML = ''; }
 });
 
-// Auto save config
 const CFG_FIELDS = ['cfg-token', 'cfg-cookies', 'cfg-cookiecheck', 'cfg-delay-tym', 'cfg-delay-follow',
                     'cfg-delay-comment', 'cfg-threads', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
 CFG_FIELDS.forEach(cls => {
