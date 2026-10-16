@@ -13,7 +13,7 @@
             <span class="logo-icon">🚀</span>
             <div>
                 <h1>TA TOOL WEB MANAGER</h1>
-                <p class="subtitle">Chạy 3 Tool Instagram song song — TA Tool — MoMo: 0373607456</p>
+                <p class="subtitle">Chạy 7 Tool Multi-Platform — TA Tool — MoMo: 0373607456</p>
             </div>
         </div>
         <div class="header-info">
@@ -38,10 +38,28 @@
             <div class="config-form" id="form-{{ safe_key }}">
                 <div class="form-title">⚙️ CẤU HÌNH — {{ info.name }}</div>
 
-                {% if key != '11223' %}
+                {% if info.type == 'userscript' %}
+                <div class="form-row">
+                    <label>📥 Userscript — Tải về và cài vào Tampermonkey:</label>
+                    <a href="/api/download/{{ key }}" class="btn btn-start" style="text-decoration:none;width:fit-content;margin-top:8px" download>
+                        <span class="btn-icon">⬇</span> Tải file .user.js
+                    </a>
+                </div>
+                <div class="form-row">
+                    <label>📖 Hướng dẫn:</label>
+                    <div style="font-size:12px;color:var(--text-dim);line-height:1.8;padding:8px 12px;background:#05080f;border-radius:8px">
+                        1. Cài extension <b>Tampermonkey</b> trên Chrome/Edge/Firefox<br>
+                        2. Nhấn nút "Tải file .user.js" bên trên<br>
+                        3. Mở Tampermonkey → Dashboard → Utilities → Import → chọn file vừa tải<br>
+                        4. Vào facebook.com → Tool sẽ tự xuất hiện góc phải dưới
+                    </div>
+                </div>
+                {% else %}
+
+                {% if key == 'xsmmv3.2' or key == 'xsmmigv5.2' %}
                 <div class="form-row">
                     <label>🔑 Access Token XSMM:</label>
-                    <input type="text" class="cfg-input cfg-token" placeholder="Dán token XSMM (Bearer token)" autocomplete="off">
+                    <input type="text" class="cfg-input cfg-token" placeholder="Dán token XSMM" autocomplete="off">
                 </div>
                 {% endif %}
 
@@ -52,6 +70,7 @@
                 </div>
                 {% endif %}
 
+                {% if key in ['xsmmv3.2', 'xsmmigv5.2', '11223'] %}
                 <div class="form-row">
                     <label>📋 Danh sách Cookie IG/FB <small>(mỗi dòng 1 nick: <code>cookie</code> hoặc <code>cookie|proxy</code>)</small>:</label>
                     <textarea class="cfg-input cfg-cookies" rows="6" placeholder="sessionid=abc; csrftoken=xyz&#10;sessionid=def; csrftoken=uvw|http://user:pass@1.2.3.4:8080"></textarea>
@@ -78,29 +97,52 @@
                 <div class="form-row form-row-inline">
                     <label>🔀 Cấu hình luồng:</label>
                     <div class="inline-inputs">
-                        <span>🔢 Số luồng song song <input type="number" class="cfg-input cfg-threads" value="10" min="1" max="50" style="width:70px"></span>
+                        <span>🔢 Số luồng <input type="number" class="cfg-input cfg-threads" value="10" min="1" max="50" style="width:70px"></span>
                         <span>Jobs đổi nick <input type="number" class="cfg-input cfg-rotate" value="99999" min="1" style="width:90px"></span>
                         <span>Chờ khi hết <input type="number" class="cfg-input cfg-wait" value="150" min="10" style="width:80px"></span>
                     </div>
                 </div>
+                {% endif %}
 
                 {% if key == '11223' %}
                 <div class="form-row form-row-inline">
                     <label>🎬 Chế độ (Tool 3):</label>
                     <div class="inline-inputs">
                         <select class="cfg-input cfg-mode" style="width:220px">
-                            <option value="1">1. Like (nhận xu ngay)</option>
-                            <option value="2">2. Follow (đủ 12 mới nhận)</option>
-                            <option value="3">3. Comment (nhận xu ngay)</option>
+                            <option value="1">1. Like</option>
+                            <option value="2">2. Follow (đủ 12)</option>
+                            <option value="3">3. Comment</option>
                         </select>
                         <span>Delay coin <input type="number" class="cfg-input cfg-delaycoin" value="3" min="1" style="width:70px"></span>
                     </div>
                 </div>
                 {% endif %}
 
+                {% if key == 'login' %}
+                <div class="form-row">
+                    <label>ℹ️ Tool sẽ hỏi qua ô input bên dưới terminal. Định dạng: <code>uid|pass|2fa|cookie</code></label>
+                </div>
+                {% endif %}
+
+                {% if key == 'chuyenpage' %}
+                <div class="form-row">
+                    <label>ℹ️ Tool sẽ hỏi qua ô input bên dưới terminal: Token nguồn → chọn page → pass nguồn → token đích</label>
+                </div>
+                {% endif %}
+
+                {% if key == 'bon' %}
+                <div class="form-row">
+                    <label>ℹ️ Tool chạy tự động, không cần cấu hình. Nhấn "Chạy Tool" là xong.</label>
+                </div>
+                {% endif %}
+
+                {% endif %}
+
                 <div class="form-actions">
+                    {% if info.type != 'userscript' %}
                     <button class="btn btn-start" data-tool="{{ key }}"><span class="btn-icon">▶</span> Chạy Tool</button>
                     <button class="btn btn-stop" data-tool="{{ key }}" disabled><span class="btn-icon">⏹</span> Dừng</button>
+                    {% endif %}
                     <button class="btn btn-clear" data-tool="{{ key }}" disabled><span class="btn-icon">🧹</span> Xóa Log</button>
                     <button class="btn btn-save" data-tool="{{ key }}" disabled><span class="btn-icon">💾</span> Lưu Log</button>
                 </div>
@@ -115,13 +157,13 @@
             <div class="terminal-wrap">
                 <div class="terminal-header">
                     <div class="dots"><span></span><span></span><span></span></div>
-                    <div class="term-title">{{ key }}.py — output</div>
+                    <div class="term-title">{{ key }} — output</div>
                 </div>
                 <div class="terminal" id="term-{{ safe_key }}"></div>
             </div>
 
             <div class="input-bar">
-                <input type="text" class="stdin-input" placeholder="Nhập tay (nếu tool hỏi thêm). Enter để gửi" data-tool="{{ key }}" disabled>
+                <input type="text" class="stdin-input" placeholder="Nhập input cho tool. Enter để gửi" data-tool="{{ key }}" disabled>
                 <button class="btn btn-send" data-tool="{{ key }}" disabled>Gửi ⏎</button>
             </div>
         </section>
