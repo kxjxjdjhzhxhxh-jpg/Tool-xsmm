@@ -6,93 +6,84 @@ function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
 function now() { return new Date().toLocaleTimeString('vi-VN', { hour12: false }); }
 function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-// ================== HIỆU ỨNG CANVAS: SÉT + TIM + HOA ==================
-// 👇 CHỈ CHẠY KHI BẤM "CHẠY TOOL"
-(function initEffects() {
-    const canvas = document.getElementById('fx-canvas');
-    if (!canvas) return;
+// ================== HIỆU ỨNG TRONG PANEL ==================
+function createEffectForPanel(canvas) {
+    if (!canvas) return null;
     const ctx = canvas.getContext('2d');
-    let W, H;
-    let EFFECTS_ACTIVE = false; // 👈 Cờ bật/tắt
+    let W = 0, H = 0;
+    let ACTIVE = false;
 
     function resize() {
-        W = canvas.width = window.innerWidth;
-        H = canvas.height = window.innerHeight;
+        const rect = canvas.getBoundingClientRect();
+        W = canvas.width = Math.max(1, rect.width);
+        H = canvas.height = Math.max(1, rect.height);
     }
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
     resize();
-    window.addEventListener('resize', resize);
 
     let ACCENT = '#00d4ff';
     function getAccent() {
-        return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#00d4ff';
+        const panel = canvas.closest('.tool-panel');
+        const c = panel ? getComputedStyle(panel).getPropertyValue('--panel-color').trim() : '#00d4ff';
+        return c || '#00d4ff';
     }
-    setInterval(() => { ACCENT = getAccent(); }, 1000);
 
-    // HOA
     const flowers = [];
     const FLOWER_COLORS = ['#ff6b9d', '#ffd93d', '#a78bfa', '#ff8fab', '#f9a8d4'];
-    function createFlower() {
+    function newFlower() {
         return {
-            x: Math.random() * W, y: -30,
-            size: 8 + Math.random() * 12,
-            speedY: 0.5 + Math.random() * 1,
-            speedX: (Math.random() - 0.5) * 0.8,
+            x: Math.random() * W, y: -20,
+            size: 6 + Math.random() * 8,
+            speedY: 0.4 + Math.random() * 0.8,
+            speedX: (Math.random() - 0.5) * 0.6,
             rot: Math.random() * Math.PI * 2,
             rotSpeed: (Math.random() - 0.5) * 0.05,
             color: FLOWER_COLORS[Math.floor(Math.random() * FLOWER_COLORS.length)],
             type: Math.random() < 0.5 ? 'flower' : 'petal'
         };
     }
-    function spawnFlowers() {
-        flowers.length = 0;
-        for (let i = 0; i < 15; i++) {
-            const f = createFlower();
-            f.y = Math.random() * H;
-            flowers.push(f);
-        }
+    for (let i = 0; i < 8; i++) {
+        const f = newFlower();
+        f.y = Math.random() * H;
+        flowers.push(f);
     }
 
-    // TIM
     const hearts = [];
-    function createHeart() {
+    function newHeart() {
         return {
-            x: Math.random() * W, y: -30,
-            size: 8 + Math.random() * 10,
-            speedY: 0.8 + Math.random() * 1.2,
-            speedX: (Math.random() - 0.5) * 0.6,
-            color: ['#ef4444', '#ec4899', '#f43f5e', '#fb7185', '#fda4af'][Math.floor(Math.random() * 5)],
+            x: Math.random() * W, y: -20,
+            size: 6 + Math.random() * 7,
+            speedY: 0.6 + Math.random() * 1,
+            speedX: (Math.random() - 0.5) * 0.5,
+            color: ['#ef4444', '#ec4899', '#f43f5e', '#fb7185'][Math.floor(Math.random() * 4)],
             alpha: 0.6 + Math.random() * 0.4,
             pulse: Math.random() * Math.PI * 2
         };
     }
-    function spawnHearts() {
-        hearts.length = 0;
-        for (let i = 0; i < 10; i++) {
-            const h = createHeart();
-            h.y = Math.random() * H;
-            hearts.push(h);
-        }
+    for (let i = 0; i < 6; i++) {
+        const h = newHeart();
+        h.y = Math.random() * H;
+        hearts.push(h);
     }
 
-    // SÉT
-    const lightningBolts = [];
-    function createLightning() {
-        const startX = Math.random() * W;
-        const segments = [];
-        let x = startX, y = 0;
-        const endY = H * (0.3 + Math.random() * 0.4);
+    const bolts = [];
+    function newBolt() {
+        const sx = Math.random() * W;
+        const segs = [];
+        let x = sx, y = 0;
+        const endY = H * (0.4 + Math.random() * 0.5);
         while (y < endY) {
-            segments.push({ x, y });
-            x += (Math.random() - 0.5) * 80;
-            y += 15 + Math.random() * 25;
+            segs.push({ x, y });
+            x += (Math.random() - 0.5) * 60;
+            y += 10 + Math.random() * 20;
         }
-        return { segments, life: 1, fadeSpeed: 0.02 + Math.random() * 0.03,
-                 width: 1.5 + Math.random() * 2, branch: Math.random() < 0.3 };
+        return { segments: segs, life: 1, fadeSpeed: 0.03 + Math.random() * 0.02,
+                 width: 1 + Math.random() * 1.5 };
     }
     function triggerLightning() {
-        // Chớp 3 tia liên tiếp
         for (let i = 0; i < 3; i++) {
-            setTimeout(() => lightningBolts.push(createLightning()), i * 150);
+            setTimeout(() => bolts.push(newBolt()), i * 120);
         }
     }
 
@@ -102,42 +93,21 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
         ctx.globalAlpha = bolt.life;
         ctx.strokeStyle = color;
         ctx.lineWidth = bolt.width;
-        ctx.shadowBlur = 25;
+        ctx.shadowBlur = 15;
         ctx.shadowColor = color;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.beginPath();
         ctx.moveTo(bolt.segments[0].x, bolt.segments[0].y);
-        for (let i = 1; i < bolt.segments.length; i++) {
-            ctx.lineTo(bolt.segments[i].x, bolt.segments[i].y);
-        }
+        for (let i = 1; i < bolt.segments.length; i++) ctx.lineTo(bolt.segments[i].x, bolt.segments[i].y);
         ctx.stroke();
         ctx.strokeStyle = 'rgba(255,255,255,' + bolt.life + ')';
         ctx.lineWidth = bolt.width * 0.4;
         ctx.shadowBlur = 0;
         ctx.beginPath();
         ctx.moveTo(bolt.segments[0].x, bolt.segments[0].y);
-        for (let i = 1; i < bolt.segments.length; i++) {
-            ctx.lineTo(bolt.segments[i].x, bolt.segments[i].y);
-        }
+        for (let i = 1; i < bolt.segments.length; i++) ctx.lineTo(bolt.segments[i].x, bolt.segments[i].y);
         ctx.stroke();
-        if (bolt.branch && bolt.segments.length > 3) {
-            const idx = Math.floor(bolt.segments.length / 2);
-            const bp = bolt.segments[idx];
-            ctx.strokeStyle = color;
-            ctx.lineWidth = bolt.width * 0.6;
-            ctx.shadowBlur = 20;
-            ctx.shadowColor = color;
-            ctx.beginPath();
-            ctx.moveTo(bp.x, bp.y);
-            let bx = bp.x, by = bp.y;
-            for (let i = 0; i < 4; i++) {
-                bx += (Math.random() - 0.5) * 60;
-                by += 20 + Math.random() * 20;
-                ctx.lineTo(bx, by);
-            }
-            ctx.stroke();
-        }
         ctx.restore();
     }
 
@@ -146,17 +116,14 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
         ctx.translate(f.x, f.y);
         ctx.rotate(f.rot);
         ctx.globalAlpha = 0.85;
+        ctx.fillStyle = f.color;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = f.color;
         if (f.type === 'petal') {
-            ctx.fillStyle = f.color;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = f.color;
             ctx.beginPath();
             ctx.ellipse(0, 0, f.size, f.size * 0.5, 0, 0, Math.PI * 2);
             ctx.fill();
         } else {
-            ctx.fillStyle = f.color;
-            ctx.shadowBlur = 12;
-            ctx.shadowColor = f.color;
             for (let i = 0; i < 5; i++) {
                 ctx.save();
                 ctx.rotate((Math.PI * 2 / 5) * i);
@@ -166,7 +133,6 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
                 ctx.restore();
             }
             ctx.fillStyle = '#ffd93d';
-            ctx.shadowColor = '#ffd93d';
             ctx.beginPath();
             ctx.arc(0, 0, f.size * 0.25, 0, Math.PI * 2);
             ctx.fill();
@@ -177,10 +143,10 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
     function drawHeart(h) {
         ctx.save();
         ctx.translate(h.x, h.y);
-        const s = h.size + Math.sin(h.pulse) * 1.5;
+        const s = h.size + Math.sin(h.pulse) * 1.2;
         ctx.globalAlpha = h.alpha;
         ctx.fillStyle = h.color;
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 10;
         ctx.shadowColor = h.color;
         ctx.beginPath();
         ctx.moveTo(0, s * 0.3);
@@ -194,56 +160,69 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
 
     function loop() {
         ctx.clearRect(0, 0, W, H);
-        // 👇 CHỈ VẼ KHI EFFECTS_ACTIVE = true
-        if (EFFECTS_ACTIVE) {
+        if (ACTIVE && W > 0 && H > 0) {
+            ACCENT = getAccent();
             for (const f of flowers) {
                 f.y += f.speedY;
-                f.x += f.speedX + Math.sin(f.y * 0.01) * 0.3;
+                f.x += f.speedX + Math.sin(f.y * 0.02) * 0.3;
                 f.rot += f.rotSpeed;
-                if (f.y > H + 40) Object.assign(f, createFlower());
+                if (f.y > H + 30) Object.assign(f, newFlower());
                 drawFlower(f);
             }
             for (const h of hearts) {
                 h.y += h.speedY;
-                h.x += h.speedX + Math.sin(h.y * 0.02) * 0.4;
+                h.x += h.speedX + Math.sin(h.y * 0.02) * 0.3;
                 h.pulse += 0.08;
-                if (h.y > H + 40) Object.assign(h, createHeart());
+                if (h.y > H + 30) Object.assign(h, newHeart());
                 drawHeart(h);
             }
-            for (let i = lightningBolts.length - 1; i >= 0; i--) {
-                const bolt = lightningBolts[i];
-                bolt.life -= bolt.fadeSpeed;
-                if (bolt.life <= 0) { lightningBolts.splice(i, 1); continue; }
-                drawLightning(bolt, ACCENT);
+            for (let i = bolts.length - 1; i >= 0; i--) {
+                bolts[i].life -= bolts[i].fadeSpeed;
+                if (bolts[i].life <= 0) { bolts.splice(i, 1); continue; }
+                drawLightning(bolts[i], ACCENT);
             }
-            // Thỉnh thoảng có tia sét ngẫu nhiên khi đang chạy
-            if (Math.random() < 0.015 && lightningBolts.length < 2) {
-                lightningBolts.push(createLightning());
-            }
+            if (Math.random() < 0.02 && bolts.length < 2) bolts.push(newBolt());
         }
         requestAnimationFrame(loop);
     }
     loop();
 
-    // ================== API CHO BÊN NGOÀI ==================
-    window.FX = {
-        start: function () {
-            EFFECTS_ACTIVE = true;
-            spawnFlowers();
-            spawnHearts();
-            triggerLightning();   // 3 tia đầu
-        },
-        stop: function () {
-            EFFECTS_ACTIVE = false;
-            flowers.length = 0;
-            hearts.length = 0;
-            lightningBolts.length = 0;
-        },
-        lightning: function () {
+    return {
+        start: () => {
+            ACTIVE = true;
+            canvas.classList.add('active');
+            resize();
             triggerLightning();
+        },
+        stop: () => {
+            ACTIVE = false;
+            canvas.classList.remove('active');
+            bolts.length = 0;
+            ctx.clearRect(0, 0, W, H);
         }
     };
-})();
+}
+
+// Khởi tạo effect cho từng panel (chỉ 1 lần)
+const fxInstances = {};
+$$('.tool-panel').forEach(panel => {
+    const tool = panel.dataset.tool;
+    const cForm = panel.querySelector('.fx-canvas-form');
+    const cTerm = panel.querySelector('.fx-canvas-term');
+    fxInstances[tool] = {
+        form: createEffectForPanel(cForm),
+        term: createEffectForPanel(cTerm)
+    };
+});
+
+function fxStart(tool) {
+    const fx = fxInstances[tool];
+    if (fx) { if (fx.form) fx.form.start(); if (fx.term) fx.term.start(); }
+}
+function fxStop(tool) {
+    const fx = fxInstances[tool];
+    if (fx) { if (fx.form) fx.form.stop(); if (fx.term) fx.term.stop(); }
+}
 
 // ================== COLOR PICKER ==================
 (function initColorPicker() {
@@ -255,9 +234,8 @@ function escapeHtml(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').r
         picker.value = saved;
     }
     picker.addEventListener('input', (e) => {
-        const color = e.target.value;
-        document.documentElement.style.setProperty('--accent', color);
-        localStorage.setItem('theme_accent', color);
+        document.documentElement.style.setProperty('--accent', e.target.value);
+        localStorage.setItem('theme_accent', e.target.value);
     });
 })();
 
@@ -272,19 +250,36 @@ function classifyLine(line) {
 function appendLine(termEl, line, ts = null) {
     const div = document.createElement('div');
     div.className = 'term-line ' + classifyLine(line);
-    const time = ts || now();
-    div.innerHTML = `<span class="ts">[${time}]</span>${escapeHtml(line)}`;
+    div.innerHTML = `<span class="ts">[${ts || now()}]</span>${escapeHtml(line)}`;
     termEl.appendChild(div);
     termEl.scrollTop = termEl.scrollHeight;
 }
 
 setInterval(() => { const el = $('#clock'); if (el) el.textContent = now(); }, 1000);
 
+// Tab switch
 $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const tool = btn.dataset.tool;
         $$('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
         $$('.tool-panel').forEach(p => p.classList.toggle('active', p.dataset.tool === tool));
+        // Resize canvas
+        setTimeout(() => {
+            const fx = fxInstances[tool];
+            if (fx) {
+                if (fx.form) fx.form.start === fx.form.start; // no-op, chỉ để trigger
+                const cf = $(`.tool-panel[data-tool="${tool}"] .fx-canvas-form`);
+                const ct = $(`.tool-panel[data-tool="${tool}"] .fx-canvas-term`);
+                if (cf) {
+                    const r = cf.getBoundingClientRect();
+                    cf.width = r.width; cf.height = r.height;
+                }
+                if (ct) {
+                    const r = ct.getBoundingClientRect();
+                    ct.width = r.width; ct.height = r.height;
+                }
+            }
+        }, 50);
     });
 });
 $$('.tab-btn')[0]?.click();
@@ -339,13 +334,9 @@ function buildInputSequence(tool) {
         cookies.push(parts[0].trim());
         proxies.push(parts[1] ? parts[1].trim() : '');
     }
-
     const seq = [];
-
     if (tool === 'xsmmv3.2') {
-        seq.push(threads);
-        seq.push(token);
-        seq.push(String(cookies.length));
+        seq.push(threads); seq.push(token); seq.push(String(cookies.length));
         for (let i = 0; i < cookies.length; i++) { seq.push(cookies[i]); seq.push(proxies[i] || ''); }
         if (cookies.length === 1) seq.push(wait); else seq.push(rotate);
         seq.push(jobLike ? 'on' : 'off'); if (jobLike) seq.push(delayTym);
@@ -361,26 +352,21 @@ function buildInputSequence(tool) {
         seq.push(jobFollow ? 'on' : 'off'); if (jobFollow) { seq.push(delayFollow); seq.push('4-6'); seq.push('10'); }
         seq.push(jobComment ? 'on' : 'off'); if (jobComment) { seq.push(delayComment); seq.push('2-3'); }
     } else if (tool === '11223') {
-        seq.push(token);
-        seq.push(cookies[0] || '');
-        seq.push(mode);
-        seq.push(delayTym);
-        seq.push(String(parseInt(delayTym) + 5));
-        seq.push(delayCoin);
-        seq.push(String(parseInt(delayCoin) + 2));
+        seq.push(token); seq.push(cookies[0] || ''); seq.push(mode);
+        seq.push(delayTym); seq.push(String(parseInt(delayTym) + 5));
+        seq.push(delayCoin); seq.push(String(parseInt(delayCoin) + 2));
     }
     return seq.filter(s => s !== undefined && s !== null);
 }
 
-// START — 👇 BẬT HIỆU ỨNG
+// START
 $$('.btn-start').forEach(btn => {
     btn.addEventListener('click', async () => {
         const tool = btn.dataset.tool;
         const token = (getCfg(tool, 'cfg-token')?.value || '').trim();
         const cookiesRaw = (getCfg(tool, 'cfg-cookies')?.value || '').trim();
-
-        if (!token) { alert('⚠️ Vui lòng nhập Access Token XSMM!'); return; }
-        if (!cookiesRaw) { alert('⚠️ Vui lòng nhập ít nhất 1 cookie!'); return; }
+        if (!token) { alert('⚠️ Nhập Access Token XSMM!'); return; }
+        if (!cookiesRaw) { alert('⚠️ Nhập ít nhất 1 cookie!'); return; }
 
         btn.disabled = true;
         try {
@@ -392,21 +378,16 @@ $$('.btn-start').forEach(btn => {
             setStatus(tool, 'running', data.session_id);
             socket.emit('join', { session_id: data.session_id });
 
-            // 👇 BẬT HIỆU ỨNG KHI BẮT ĐẦU CHẠY
-            if (window.FX) window.FX.start();
+            fxStart(tool);
 
             const term = getTerm(tool);
-            if (term) {
-                term.innerHTML = '';
-                appendLine(term, `▶ Bắt đầu chạy [${tool}] — Session: ${data.session_id}`);
-            }
+            if (term) { term.innerHTML = ''; appendLine(term, `▶ Bắt đầu chạy [${tool}] — Session: ${data.session_id}`); }
 
             const seq = buildInputSequence(tool);
             for (let i = 0; i < seq.length; i++) {
                 await new Promise(r => setTimeout(r, 400));
                 await fetch(`/api/input/${data.session_id}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ text: seq[i] })
                 });
                 if (term) {
@@ -416,21 +397,19 @@ $$('.btn-start').forEach(btn => {
             }
             if (term) appendLine(term, `✅ Đã gửi xong cấu hình! Tool đang chạy...`, now());
             $(`.tab-btn[data-tool="${tool}"]`).click();
-        } catch (e) { alert('Lỗi kết nối: ' + e.message); btn.disabled = false; }
+        } catch (e) { alert('Lỗi: ' + e.message); btn.disabled = false; }
     });
 });
 
-// STOP — 👇 TẮT HIỆU ỨNG
+// STOP
 $$('.btn-stop').forEach(btn => {
     btn.addEventListener('click', async () => {
         const tool = btn.dataset.tool;
-        const s = state[tool];
-        if (!s) return;
+        const s = state[tool]; if (!s) return;
         if (!confirm('Dừng tool này?')) return;
         await fetch(`/api/stop/${s.sessionId}`, { method: 'POST' });
         setStatus(tool, 'stopped');
-        // 👇 TẮT HIỆU ỨNG KHI DỪNG
-        if (window.FX) window.FX.stop();
+        fxStop(tool);
     });
 });
 
@@ -440,38 +419,30 @@ $$('.btn-clear').forEach(btn => {
         const tool = btn.dataset.tool;
         const t = getTerm(tool); if (t) t.innerHTML = '';
         const c = getOutputCount(tool); if (c) c.textContent = '0 dòng';
-        const s = state[tool];
-        if (s) fetch(`/api/clear/${s.sessionId}`, { method: 'POST' });
+        const s = state[tool]; if (s) fetch(`/api/clear/${s.sessionId}`, { method: 'POST' });
     });
 });
 
 // SAVE
 $$('.btn-save').forEach(btn => {
     btn.addEventListener('click', async () => {
-        const tool = btn.dataset.tool;
-        const s = state[tool];
+        const tool = btn.dataset.tool; const s = state[tool];
         if (!s) { alert('Chưa có session!'); return; }
         const res = await fetch(`/api/save/${s.sessionId}`, { method: 'POST' });
         const data = await res.json();
-        if (data.ok) alert('Đã lưu: ' + data.filename);
-        else alert('Lỗi: ' + (data.error || ''));
+        if (data.ok) alert('Đã lưu: ' + data.filename); else alert('Lỗi: ' + (data.error || ''));
     });
 });
 
 // STDIN
 function sendStdin(tool) {
-    const input = $(`.stdin-input[data-tool="${tool}"]`);
-    if (!input) return;
-    const text = input.value;
-    const s = state[tool];
-    if (!s || !s.sessionId) return;
+    const input = $(`.stdin-input[data-tool="${tool}"]`); if (!input) return;
+    const text = input.value; const s = state[tool]; if (!s || !s.sessionId) return;
     fetch(`/api/input/${s.sessionId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text })
     });
-    const term = getTerm(tool);
-    if (term) appendLine(term, `> ${text}`, now());
+    const term = getTerm(tool); if (term) appendLine(term, `> ${text}`, now());
     input.value = '';
 }
 $$('.btn-send').forEach(btn => btn.addEventListener('click', () => sendStdin(btn.dataset.tool)));
@@ -484,11 +455,9 @@ socket.on('output', data => {
     const { session_id, line, ts } = data;
     const tool = Object.keys(state).find(k => state[k].sessionId === session_id);
     if (!tool) return;
-    const term = getTerm(tool);
-    if (!term) return;
+    const term = getTerm(tool); if (!term) return;
     appendLine(term, line, ts);
-    const oc = getOutputCount(tool);
-    if (oc) oc.textContent = term.children.length + ' dòng';
+    const oc = getOutputCount(tool); if (oc) oc.textContent = term.children.length + ' dòng';
 });
 
 socket.on('status', data => {
@@ -500,10 +469,7 @@ socket.on('status', data => {
         setStatus(tool, 'stopped');
         const term = getTerm(tool);
         if (term) appendLine(term, `■ ${message || 'Đã dừng'} (exit: ${return_code ?? '?'})`);
-        // 👇 KHI TOOL TỰ KẾT THÚC → TẮT HIỆU ỨNG
-        // Nhưng chỉ tắt nếu KHÔNG còn tool nào đang chạy
-        const anyRunning = Object.values(state).some(s => s.status === 'running');
-        if (!anyRunning && window.FX) window.FX.stop();
+        fxStop(tool);
     }
 });
 
@@ -512,6 +478,7 @@ socket.on('cleared', data => {
     if (tool) { const t = getTerm(tool); if (t) t.innerHTML = ''; }
 });
 
+// Auto save config
 const CFG_FIELDS = ['cfg-token', 'cfg-cookies', 'cfg-cookiecheck', 'cfg-delay-tym', 'cfg-delay-follow',
                     'cfg-delay-comment', 'cfg-threads', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
 CFG_FIELDS.forEach(cls => {
@@ -531,7 +498,7 @@ CFG_FIELDS.forEach(cls => {
         const key = `ta_cfg_${tool}_${cls}`;
         const saved = localStorage.getItem(key);
         if (saved !== null) cb.checked = saved === 'true';
-        cb.addEventListener('change', () => localStorage.setItem(key, cb.checked));
+        cb.addEventListener('change', () => localStorage.setItem(key, cb.value));
     });
 });
 
