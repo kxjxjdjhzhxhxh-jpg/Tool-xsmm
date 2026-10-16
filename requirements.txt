@@ -4,4 +4,6 @@ python-socketio==5.11.2
 python-engineio==4.9.1
 requests==2.32.3
 curl_cffi==0.7.0
+cryptography==43.0.1
+pyotp==2.9.0
 gunicorn==22.0.0
