@@ -9,7 +9,9 @@ import tempfile
 import random
 import string
 import re
+import hashlib
 from datetime import datetime
+from queue import Queue
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit, join_room
 import requests
@@ -27,7 +29,235 @@ os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
 
 
 # ============================================================================
-# ==================== TOOL 1: xsmmv3.2.py ==================================
+# ==================== TOOL 4: FB REG PAGE (MULTI-THREAD) ====================
+# ============================================================================
+FB_REG_STATE = {
+    "running": False,
+    "results": [],
+    "threads": 0,
+    "running_threads": 0,
+    "start_time": 0,
+    "total_success": 0,
+    "total_fail": 0,
+}
+
+FB_REG_LOCK = threading.Lock()
+
+
+def fb_get_dtsg(cookie):
+    try:
+        headers = {
+            'cookie': cookie,
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        r = requests.get('https://www.facebook.com/settings', headers=headers, timeout=15)
+        dtsg = re.search(r'name="fb_dtsg" value="(.*?)"', r.text)
+        jz = re.search(r'name="jazoest" value="(.*?)"', r.text)
+        if dtsg and jz: return dtsg.group(1), jz.group(1)
+        alt = re.search(r'"DTSGInitialData",\[\],{"token":"(.*?)"}', r.text)
+        if alt: return alt.group(1), "22"
+    except Exception: pass
+    return None, None
+
+
+def fb_create_page_worker(idx, cookie, page_name, category_id, proxy, result_list):
+    """Worker tạo 1 page FB"""
+    result = {
+        "idx": idx,
+        "uid": "",
+        "page_id": "",
+        "page_name": page_name,
+        "ip": proxy or "Direct",
+        "timezone": "Asia/Ho_Chi_Minh",
+        "status": "Đang xử lý...",
+        "ok": False,
+    }
+
+    try:
+        # Lấy UID từ cookie
+        m = re.search(r'c_user=(\d+)', cookie)
+        if m: result["uid"] = m.group(1)
+
+        # Proxy test
+        proxies = None
+        if proxy:
+            p = proxy.strip()
+            if "://" not in p: p = "http://" + p
+            proxies = {"http": p, "https": p}
+
+        # Lấy dtsg
+        headers = {
+            'cookie': cookie,
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        try:
+            r = requests.get('https://www.facebook.com/settings', headers=headers, proxies=proxies, timeout=20)
+            dtsg = re.search(r'name="fb_dtsg" value="(.*?)"', r.text)
+            jz = re.search(r'name="jazoest" value="(.*?)"', r.text)
+            if dtsg and jz:
+                fb_dtsg, jazoest = dtsg.group(1), jz.group(1)
+            else:
+                alt = re.search(r'"DTSGInitialData",\[\],{"token":"(.*?)"}', r.text)
+                if alt: fb_dtsg, jazoest = alt.group(1), "22"
+                else:
+                    result["status"] = "Cookie die / không lấy được fb_dtsg"
+                    result_list.append(result)
+                    return
+        except Exception as e:
+            result["status"] = f"Lỗi kết nối: {str(e)[:50]}"
+            result_list.append(result)
+            return
+
+        # Gọi GraphQL tạo page
+        headers2 = {
+            'cookie': cookie,
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://www.facebook.com',
+            'referer': 'https://www.facebook.com/pages/creation/'
+        }
+        payload = {
+            'fb_dtsg': fb_dtsg,
+            'jazoest': jazoest,
+            'variables': json.dumps({
+                "input": {
+                    "actor_id": result["uid"],
+                    "client_mutation_id": "1",
+                    "name": page_name,
+                    "category_id": category_id,
+                    "creation_source": "comet"
+                }
+            }),
+            'doc_id': '5814795813638014'
+        }
+        try:
+            r = requests.post("https://www.facebook.com/api/graphql/", headers=headers2, data=payload, proxies=proxies, timeout=25)
+            res = r.json()
+            if 'errors' in res:
+                result["status"] = f"FB lỗi: {res['errors'][0].get('message', '')[:80]}"
+                result_list.append(result)
+                return
+            data = res.get('data', {})
+            pid_match = re.search(r'"page_id":"(\d+)"', json.dumps(data))
+            if pid_match:
+                result["page_id"] = pid_match.group(1)
+                result["status"] = "Tạo OK"
+                result["ok"] = True
+            else:
+                result["status"] = "Không có page_id (có thể fail)"
+                result_list.append(result)
+                return
+        except Exception as e:
+            result["status"] = f"Lỗi GraphQL: {str(e)[:50]}"
+            result_list.append(result)
+            return
+
+        result_list.append(result)
+    except Exception as e:
+        result["status"] = f"Lỗi: {str(e)[:50]}"
+        result_list.append(result)
+
+
+def run_fb_reg_page_thread(task_queue, result_list, threads_count):
+    """Chạy đa luồng"""
+    FB_REG_STATE["running"] = True
+    FB_REG_STATE["start_time"] = time.time()
+
+    def worker():
+        while True:
+            try:
+                task = task_queue.get_nowait()
+            except:
+                break
+            idx, cookie, page_name, category_id, proxy = task
+            try:
+                fb_create_page_worker(idx, cookie, page_name, category_id, proxy, result_list)
+                with FB_REG_LOCK:
+                    latest = result_list[-1] if result_list else None
+                    if latest and latest.get("ok"):
+                        FB_REG_STATE["total_success"] += 1
+                    else:
+                        FB_REG_STATE["total_fail"] += 1
+                    socketio.emit('fb_reg_update', {
+                        "result": latest,
+                        "stats": {
+                            "success": FB_REG_STATE["total_success"],
+                            "fail": FB_REG_STATE["total_fail"],
+                            "elapsed": int(time.time() - FB_REG_STATE["start_time"]),
+                        }
+                    })
+            except Exception as e:
+                with FB_REG_LOCK:
+                    FB_REG_STATE["total_fail"] += 1
+            finally:
+                task_queue.task_done()
+
+    threads = []
+    for _ in range(threads_count):
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
+
+    FB_REG_STATE["running"] = False
+    socketio.emit('fb_reg_done', {
+        "success": FB_REG_STATE["total_success"],
+        "fail": FB_REG_STATE["total_fail"],
+        "elapsed": int(time.time() - FB_REG_STATE["start_time"]),
+    })
+
+
+@app.route('/api/fb_reg_start', methods=['POST'])
+def api_fb_reg_start():
+    if FB_REG_STATE["running"]:
+        return jsonify({"ok": False, "error": "Đang chạy rồi!"})
+
+    data = request.json or {}
+    tasks = data.get('tasks', [])
+    threads_count = int(data.get('threads', 10))
+
+    if not tasks:
+        return jsonify({"ok": False, "error": "Không có task"})
+
+    FB_REG_STATE["running"] = True
+    FB_REG_STATE["results"] = []
+    FB_REG_STATE["total_success"] = 0
+    FB_REG_STATE["total_fail"] = 0
+
+    task_queue = Queue()
+    for i, t in enumerate(tasks):
+        task_queue.put((i + 1, t['cookie'], t['page_name'], t.get('category_id', '2200'), t.get('proxy', '')))
+
+    result_list = []
+    thread = threading.Thread(
+        target=run_fb_reg_page_thread,
+        args=(task_queue, result_list, threads_count),
+        daemon=True
+    )
+    thread.start()
+
+    return jsonify({"ok": True, "message": f"Đã bắt đầu {len(tasks)} task với {threads_count} luồng"})
+
+
+@app.route('/api/fb_reg_stop', methods=['POST'])
+def api_fb_reg_stop():
+    FB_REG_STATE["running"] = False
+    return jsonify({"ok": True})
+
+
+@app.route('/api/fb_reg_stats')
+def api_fb_reg_stats():
+    return jsonify({
+        "running": FB_REG_STATE["running"],
+        "success": FB_REG_STATE["total_success"],
+        "fail": FB_REG_STATE["total_fail"],
+        "elapsed": int(time.time() - FB_REG_STATE["start_time"]) if FB_REG_STATE["start_time"] else 0,
+    })
+
+# ============================================================================
+# ==================== TOOL 1: xsmmv3.2.py (CÓ WARMUP) ======================
 # ============================================================================
 TOOL_CODE_XSMMV32 = r'''import os
 import sys
@@ -116,6 +346,51 @@ def check_cookie_ig(cookie, proxy=None):
                'user-agent': useragent, 'sec-ch-ua': sec_ch_ua_120}
     try: return c_requests.get(url, headers=headers, proxies=format_proxy(proxy), impersonate="chrome120", timeout=30).text
     except: return "{}"
+
+# ==================== WARMUP MODULE ====================
+def ig_warmup(session, cookie, proxy, tenfb):
+    """Warmup: follow + xem feed + delay ngẫu nhiên"""
+    thread_safe_print(f"{cyan}[*] [{tenfb}] Warmup (follow + xem feed)...{reset}")
+    try:
+        # 1. Xem feed trang chủ
+        session.get("https://www.instagram.com/", impersonate="chrome120", timeout=15)
+        time.sleep(random.uniform(3, 6))
+
+        # 2. Follow vài user lớn
+        targets = ["instagram", "cristiano", "natgeo", "therock", "leomessi"]
+        for t in random.sample(targets, random.randint(1, 2)):
+            try:
+                r = session.get(f"https://www.instagram.com/{t}/", impersonate="chrome120", timeout=10)
+                m_id = re.search(r'"profile_id":"(\d+)"', r.text) or re.search(r'profilePage_(\d+)', r.text)
+                if not m_id: continue
+                tid = m_id.group(1)
+                actor_m = re.search(r'ds_user_id=(\d+)', cookie)
+                actor = actor_m.group(1) if actor_m else "0"
+                h = get_ig_headers(cookie, "", f"https://www.instagram.com/{t}/")
+                data = {
+                    "av": actor, "__d": "www", "__user": "0", "__a": "1", "__req": "s",
+                    "__hs": "20702.HYP:instagram_web_pkg.2.1...0", "dpr": "1", "__ccg": "EXCELLENT",
+                    "__rev": "1046917461", "__comet_req": "7", "lsd": "Jfq8VQNmkkkJufHSbEE9bf",
+                    "fb_api_caller_class": "RelayModern",
+                    "fb_api_req_friendly_name": "usePolarisFollowMutation",
+                    "server_timestamps": "true", "doc_id": "26508036048874888",
+                    "variables": json.dumps({"target_user_id": tid, "container_module": "profile",
+                        "nav_chain": "PolarisFeedRoot:feedPage:5:topnav-link,PolarisProfileRoot:profilePage:6:unexpected"})
+                }
+                session.post("https://www.instagram.com/api/graphql", data=data, impersonate="chrome120", timeout=15)
+                thread_safe_print(f"{green}[+] [{tenfb}] Follow @{t}{reset}")
+                time.sleep(random.uniform(4, 8))
+            except: pass
+
+        # 3. Xem thêm feed + nghỉ ngẫu nhiên
+        session.get("https://www.instagram.com/explore/", impersonate="chrome120", timeout=15)
+        time.sleep(random.uniform(5, 10))
+
+        thread_safe_print(f"{green}[+] [{tenfb}] Warmup done{reset}")
+        return True
+    except Exception as e:
+        thread_safe_print(f"{yellow}[!] [{tenfb}] Warmup fail: {e}{reset}")
+        return False
 
 def follow(target_id, cookie, csrftoken, profile_url="", proxy=None):
     if not target_id: return '{"status": "error"}'
@@ -255,12 +530,25 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
             is_live = True; tenfb = cfg['form_data']['username']
             idfb_match = re.search(r'ds_user_id=(\d+)', cookie)
             idfb = idfb_match.group(1) if idfb_match else str(cfg['form_data'].get('id', ''))
-    except Exception: is_live = False
+    except: is_live = False
     if not is_live or not idfb:
         thread_safe_print(f"{red}[!] Cookie lỗi{reset}")
         return
     px = f" | Proxy: {proxy}" if proxy else ""
     thread_safe_print(f"{green}[+] NICK [{tenfb} | {idfb}{px}]{reset}")
+
+    # WARMUP
+    warmup_sess = c_requests.Session()
+    wp = format_proxy(proxy)
+    if wp: warmup_sess.proxies = wp
+    for item in cookie.split(';'):
+        if '=' in item:
+            try:
+                k, v = item.strip().split('=', 1); warmup_sess.cookies.set(k, v, domain='.instagram.com')
+            except: pass
+    ig_warmup(warmup_sess, cookie, proxy, tenfb)
+    time.sleep(random.uniform(8, 15))
+
     try:
         acc_list = xsmm_thread.get_accounts(account_type="instagram", search=idfb)
         exists = False
@@ -270,8 +558,8 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
                     exists = True; break
         if not exists:
             xsmm_thread.add_account("instagram", f"https://www.instagram.com/{tenfb}")
-            thread_safe_print(f"{green}[+] Đã thêm [{tenfb}]{reset}")
-    except Exception: pass
+    except: pass
+
     max_job = 0; cache = []
     while True:
         job = random.choice(listnv)
@@ -294,7 +582,7 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
                     except Exception as e:
                         thread_safe_print(f"{red}[!] TYM LỖI: {e}{reset}")
                         solo += 1
-                    time.sleep(config_delays['tym'])
+                    time.sleep(config_delays['tym'] + random.uniform(0, 3))
                     if solo > 4 or max_job >= doi: break
             else: time.sleep(dl)
         elif job == 'instagram_follow':
@@ -318,8 +606,8 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
                             if len(cache) == 10:
                                 gui_nhan_xu("instagram_follow", cache, idfb, cookie, xsmm_thread, tenfb)
                                 cache = []; break
-                    except Exception: solo += 1
-                    time.sleep(config_delays['follow'])
+                    except: solo += 1
+                    time.sleep(config_delays['follow'] + random.uniform(0, 5))
                     if solo > 4 or max_job >= doi: break
             else: time.sleep(dl)
         elif job == 'instagram_comment':
@@ -343,7 +631,7 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
                     except Exception as e:
                         thread_safe_print(f"{red}[!] CMT LỖI: {e}{reset}")
                         solo += 1
-                    time.sleep(config_delays['comment'])
+                    time.sleep(config_delays['comment'] + random.uniform(0, 5))
                     if solo > 4 or max_job >= doi: break
             else: time.sleep(dl)
         if max_job >= doi:
@@ -351,7 +639,7 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
             time.sleep(dl); max_job = 0
 
 def main():
-    print(f"{cyan}===== XSMM TOOL V3.2 ====={reset}")
+    print(f"{cyan}===== XSMM TOOL V3.2 (WARMUP) ====={reset}")
     sys.stdout.write("Số luồng (1-50): "); sys.stdout.flush()
     try:
         max_threads = int(input().strip())
@@ -432,7 +720,7 @@ if __name__ == "__main__":
 '''
 
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py ================================
+# ==================== TOOL 2: xsmmigv5.2.py (CÓ WARMUP) ====================
 # ============================================================================
 TOOL_CODE_XSMMIGV52 = r'''import os
 import sys
@@ -539,15 +827,25 @@ def check_cookie_ig(cookie, proxy=None, profile=None):
     try: return c_requests.get(url, headers=h, proxies=format_proxy(proxy), impersonate=profile["impersonate"], timeout=30).text
     except Exception: return "{}"
 
-def parse_tym_cmt(t):
-    try: g = json.loads(t)
-    except Exception as e: return False, f"Parse err: {e}"
-    if not isinstance(g, dict): return False, "Invalid"
-    if "errors" in g and g["errors"]:
-        return False, g["errors"][0].get("message", "Err") if isinstance(g["errors"], list) else str(g["errors"])
-    if g.get("status") == "fail": return False, g.get("message", "fail")
-    if g.get("data") is None and g.get("status") != "ok": return False, "No data"
-    return True, "OK"
+# WARMUP
+def ig_warmup_v52(session, cookie, profile):
+    print(f"{cyan}[*] Warmup...{reset}")
+    try:
+        session.get("https://www.instagram.com/", impersonate=profile["impersonate"], timeout=15)
+        time.sleep(random.uniform(3, 6))
+        targets = ["instagram", "cristiano", "natgeo", "therock", "leomessi"]
+        for t in random.sample(targets, random.randint(1, 2)):
+            try:
+                session.get(f"https://www.instagram.com/{t}/", impersonate=profile["impersonate"], timeout=10)
+                time.sleep(random.uniform(4, 8))
+            except: pass
+        session.get("https://www.instagram.com/explore/", impersonate=profile["impersonate"], timeout=15)
+        time.sleep(random.uniform(5, 10))
+        print(f"{green}[+] Warmup done{reset}")
+        return True
+    except Exception as e:
+        print(f"{yellow}[!] Warmup fail: {e}{reset}")
+        return False
 
 def follow(target_id, cookie, csrftoken, profile_url="", proxy=None, profile=None):
     if not profile: profile = BROWSER_PROFILES[0]
@@ -636,6 +934,14 @@ def cmt(mediaid, text, cookie, csrftoken, link_job="", proxy=None, profile=None)
     try: return session.post('https://www.instagram.com/api/graphql', data=data, impersonate=profile["impersonate"], timeout=30).text.strip()
     except Exception as e: return json.dumps({"status": "error", "message": str(e)})
 
+def parse_resp(t):
+    try: g = json.loads(t)
+    except Exception as e: return False, f"Parse err"
+    if not isinstance(g, dict): return False, "Invalid"
+    if "errors" in g and g["errors"]: return False, "IG err"
+    if g.get("status") == "fail": return False, g.get("message", "fail")
+    return True, "OK"
+
 def gui_nhan_xu(job_type, task_list, uid, cookie_check, xsmm):
     if not task_list: return
     print(f"Gom {len(task_list)} task -> Gửi duyệt...")
@@ -651,7 +957,7 @@ def gui_nhan_xu(job_type, task_list, uid, cookie_check, xsmm):
         if ck.get('countdown', 0) > 0: time.sleep(ck['countdown'])
 
 def main():
-    print(f"{cyan}===== XSMM IG V5.2 ====={reset}")
+    print(f"{cyan}===== XSMM IG V5.2 (WARMUP) ====={reset}")
     sys.stdout.write("Access Token XSMM: "); sys.stdout.flush()
     token = input().strip()
 
@@ -702,7 +1008,7 @@ def main():
     sys.stdout.write("Tym (on/off): "); sys.stdout.flush()
     if input().strip().lower() == 'on':
         listnv.append('instagram_like')
-        sys.stdout.write("Delay Tym (vd 10 hoặc 10-15): "); sys.stdout.flush()
+        sys.stdout.write("Delay Tym: "); sys.stdout.flush()
         dly['tym'] = parse_r(input().strip(), 10, 15)
     sys.stdout.write("Follow (on/off): "); sys.stdout.flush()
     if input().strip().lower() == 'on':
@@ -735,6 +1041,19 @@ def main():
             if not live or not idfb:
                 print(f"{red}[!] Cookie die{reset}"); mangcookie.pop(l); continue
             print(f"{green}[+] [{tenfb} | {idfb}]{reset}")
+
+            # Warmup
+            warmup_sess = c_requests.Session()
+            wp = format_proxy(p)
+            if wp: warmup_sess.proxies = wp
+            for item in c.split(';'):
+                if '=' in item:
+                    try:
+                        k, v = item.strip().split('=', 1); warmup_sess.cookies.set(k, v, domain='.instagram.com')
+                    except Exception: pass
+            ig_warmup_v52(warmup_sess, c, prof)
+            time.sleep(random.uniform(8, 15))
+
             try:
                 al = xsmm.get_accounts(account_type="instagram", search=idfb)
                 if not (isinstance(al, dict) and al.get("accounts") and any(
@@ -755,11 +1074,11 @@ def main():
                             print(f"[Tym] {nv.get('target_url', '')}")
                             r = tym(nv.get('target_id', ''), c, csf, nv.get('target_url', ''), proxy=p, profile=prof)
                             max_j += 1; jdt += 1
-                            ok, err = parse_tym_cmt(r)
+                            ok, err = parse_resp(r)
                             if ok:
                                 gui_nhan_xu("instagram_like", [nv.get('id')], idfb, target_ck, xsmm); solo = 0
                             else: print(f"LỖI: {err}"); solo += 1
-                            time.sleep(random.randint(*dly['tym']))
+                            time.sleep(random.randint(*dly['tym']) + random.uniform(0, 3))
                             if solo > 4 or jdt >= jl or max_j >= doi: break
                 elif jt == 'instagram_follow':
                     lv = xsmm.get_tasks(jt, uid=idfb)
@@ -772,10 +1091,10 @@ def main():
                             print(f"[Follow] {tid}")
                             r = follow(tid, c, csf, lj, proxy=p, profile=prof)
                             max_j += 1; jdt += 1
-                            ok, _ = parse_tym_cmt(r)
+                            ok, _ = parse_resp(r)
                             if ok: solo = 0
                             else: solo += 1
-                            time.sleep(random.randint(*dly['follow']))
+                            time.sleep(random.randint(*dly['follow']) + random.uniform(0, 5))
                             if solo > 4 or jdt >= jl or max_j >= doi: break
                 elif jt == 'instagram_comment':
                     lv = xsmm.get_tasks(jt, uid=idfb)
@@ -788,11 +1107,11 @@ def main():
                             print(f"[CMT] {lj}")
                             r = cmt(idm, nd, c, csf, lj, proxy=p, profile=prof)
                             max_j += 1; jdt += 1
-                            ok, err = parse_tym_cmt(r)
+                            ok, err = parse_resp(r)
                             if ok:
                                 gui_nhan_xu("instagram_comment", [nv.get('id')], idfb, target_ck, xsmm); solo = 0
                             else: print(f"LỖI: {err}"); solo += 1
-                            time.sleep(random.randint(*dly['cmt']))
+                            time.sleep(random.randint(*dly['cmt']) + random.uniform(0, 5))
                             if solo > 4 or jdt >= jl or max_j >= doi: break
                 time.sleep(15)
         if len(mangcookie) == 0: print(f"{red}[!] Hết cookie{reset}"); break
@@ -802,7 +1121,7 @@ if __name__ == "__main__":
 '''
 
 # ============================================================================
-# ==================== TOOL 3: 11223.py =====================================
+# ==================== TOOL 3: 11223.py (CÓ WARMUP) =========================
 # ============================================================================
 TOOL_CODE_11223 = r'''import time
 import json
@@ -927,6 +1246,27 @@ class INSTAGRAM:
             return False
         except Exception: return False
 
+def warmup_simple(ig, av, dtsg, cookie):
+    print("[*] Warmup (xem feed + follow nhẹ)...")
+    try:
+        h = {'accept': 'text/html', 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
+             'cookie': cookie}
+        requests.get("https://www.instagram.com/", headers=h, timeout=15)
+        time.sleep(random.uniform(3, 6))
+        targets = ["instagram", "cristiano", "natgeo"]
+        for t in random.sample(targets, random.randint(1, 2)):
+            try:
+                requests.get(f"https://www.instagram.com/{t}/", headers=h, timeout=10)
+                time.sleep(random.uniform(4, 8))
+            except: pass
+        requests.get("https://www.instagram.com/explore/", headers=h, timeout=15)
+        time.sleep(random.uniform(5, 10))
+        print("[+] Warmup done")
+        return True
+    except Exception as e:
+        print(f"[!] Warmup fail: {e}")
+        return False
+
 def get_user():
     try: return requests.get("https://xsmm.net/api/taskapi/user", headers=XSMM_HEADERS).json().get("user", {})
     except: return {}
@@ -965,7 +1305,7 @@ def complete_tasks(tt, uid, tids, ck_check):
 
 def main():
     print("=" * 50)
-    print("   SIMPLE IG BOT - XSMM.NET")
+    print("   SIMPLE IG BOT + WARMUP")
     print("=" * 50)
 
     sys.stdout.write("Access Token XSMM: "); sys.stdout.flush()
@@ -1005,6 +1345,10 @@ def main():
     xsmm_uid = sync_xsmm_id(un, av)
     print(f"[+] XSMM UID: {xsmm_uid}")
 
+    # Warmup trước khi chạy
+    warmup_simple(ig, av, dtsg, ck)
+    time.sleep(random.uniform(8, 15))
+
     total = 0; cache = []
     while True:
         tasks = get_tasks(tt, xsmm_uid)
@@ -1035,7 +1379,7 @@ def main():
                 if total % 5 == 0:
                     r = random.randint(20, 30); print(f"[*] Nghỉ {r}s..."); time.sleep(r)
             else: print("   [-] Fail")
-            time.sleep(random.randint(dmin, dmax))
+            time.sleep(random.randint(dmin, dmax) + random.uniform(0, 3))
         print("--- Đợt tiếp ---"); time.sleep(5)
 
 if __name__ == "__main__":
@@ -1049,21 +1393,21 @@ if __name__ == "__main__":
 EMBEDDED_TOOLS = {
     "xsmmv3.2": {
         "name": "XSMM Tool V3.2",
-        "desc": "Tool Instagram Auto Jobs - Multi-thread",
+        "desc": "Tool Instagram Auto Jobs - Multi-thread + Warmup",
         "color": "#00d4ff",
         "filename": "xsmmv3.2.py",
         "code": TOOL_CODE_XSMMV32,
     },
     "xsmmigv5.2": {
         "name": "XSMM IG V5.2",
-        "desc": "Tool Instagram - Browser Profiles",
+        "desc": "Tool Instagram - Browser Profiles + Warmup",
         "color": "#ff6b9d",
         "filename": "xsmmigv5.2.py",
         "code": TOOL_CODE_XSMMIGV52,
     },
     "11223": {
         "name": "Simple IG Bot",
-        "desc": "Tool Like/Follow/Comment",
+        "desc": "Tool Like/Follow/Comment + Warmup",
         "color": "#ffd93d",
         "filename": "11223.py",
         "code": TOOL_CODE_11223,
@@ -1140,35 +1484,58 @@ def start_tool_process(session_id, tool_key):
 
 
 # ============================================================================
-# ==================== TOOL 4 & 5: FB AUTOMATION =============================
+# ==================== FB CHUYỂN PAGE ========================================
 # ============================================================================
-def get_fb_dtsg(cookie):
-    """Lấy fb_dtsg + jazoest từ cookie FB"""
+@app.route('/api/fb_chuyenpage', methods=['POST'])
+def api_fb_chuyenpage():
+    data = request.json or {}
+    cookie = data.get('cookie', '').strip()
+    password = data.get('password', '').strip()
+    page_id = data.get('page_id', '').strip()
+    uid_nhan = data.get('uid_nhan', '').strip()
+
+    if not cookie or not page_id or not uid_nhan:
+        return jsonify({'ok': False, 'message': 'Thiếu Cookie / Page ID / UID nhận!'}), 400
+
+    fb_dtsg, jazoest = fb_get_dtsg(cookie)
+    if not fb_dtsg:
+        return jsonify({'ok': False, 'message': 'Cookie hết hạn!'}), 400
+
+    actor_m = re.search(r'c_user=(\d+)', cookie)
+    actor_id = actor_m.group(1) if actor_m else ""
+
     headers = {
         'cookie': cookie,
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'content-type': 'application/x-www-form-urlencoded',
+        'origin': 'https://www.facebook.com',
+        'referer': f'https://www.facebook.com/{page_id}/settings/'
+    }
+    payload = {
+        'fb_dtsg': fb_dtsg, 'jazoest': jazoest,
+        'variables': json.dumps({
+            "input": {
+                "client_mutation_id": "1", "actor_id": actor_id,
+                "profile_id": page_id, "target_user_id": uid_nhan,
+                "task_ids": [1, 2, 3, 4, 5], "password": password
+            }
+        }),
+        'doc_id': '5278783472212933'
     }
     try:
-        r = requests.get('https://www.facebook.com/settings', headers=headers, timeout=15)
-        fb_dtsg = re.search(r'name="fb_dtsg" value="(.*?)"', r.text)
-        jazoest = re.search(r'name="jazoest" value="(.*?)"', r.text)
-        if fb_dtsg and jazoest:
-            return fb_dtsg.group(1), jazoest.group(1)
-        fb_dtsg_alt = re.search(r'"DTSGInitialData",\[\],{"token":"(.*?)"}', r.text)
-        if fb_dtsg_alt:
-            return fb_dtsg_alt.group(1), "22"
+        r = requests.post("https://www.facebook.com/api/graphql/",
+                          headers=headers, data=payload, timeout=20)
+        res = r.json()
+        if 'errors' in res:
+            err = res['errors'][0].get('message', 'Facebook từ chối')
+            return jsonify({'ok': False, 'message': f'Lỗi FB: {err}'}), 400
+        return jsonify({'ok': True, 'message': f'Đã gửi lời mời QTV Page {page_id} cho UID {uid_nhan}'})
     except Exception as e:
-        print(f"Lỗi lấy fb_dtsg: {e}")
-    return None, None
-
-
-def get_fb_actor(cookie):
-    m = re.search(r'c_user=(\d+)', cookie)
-    return m.group(1) if m else ""
+        return jsonify({'ok': False, 'message': f'Lỗi: {e}'}), 500
 
 
 # ============================================================================
-# ==================== ROUTES ================================================
+# ==================== ROUTES CHÍNH ==========================================
 # ============================================================================
 @app.route('/')
 def index():
@@ -1292,126 +1659,6 @@ def api_test_proxy():
     return jsonify({"ok": False, "error": "Proxy die/timeout"})
 
 
-# ============================================================================
-# ==================== FB TOOL 1: REG PAGE ===================================
-# ============================================================================
-@app.route('/api/fb/regpage', methods=['POST'])
-def api_fb_regpage():
-    data = request.json or {}
-    cookie = data.get('cookie', '').strip()
-    page_name = data.get('page_name', '').strip()
-    category_id = data.get('category_id', '2200').strip() or "2200"
-
-    if not page_name:
-        return jsonify({'ok': False, 'message': 'Nhập tên Page!'}), 400
-    if not cookie:
-        return jsonify({'ok': False, 'message': 'Nhập Cookie FB!'}), 400
-
-    fb_dtsg, jazoest = get_fb_dtsg(cookie)
-    if not fb_dtsg:
-        return jsonify({'ok': False, 'message': 'Cookie hết hạn hoặc không lấy được fb_dtsg!'}), 400
-
-    actor_id = get_fb_actor(cookie)
-    headers = {
-        'cookie': cookie,
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'content-type': 'application/x-www-form-urlencoded',
-        'origin': 'https://www.facebook.com',
-        'referer': 'https://www.facebook.com/pages/creation/'
-    }
-
-    payload = {
-        'fb_dtsg': fb_dtsg,
-        'jazoest': jazoest,
-        'variables': json.dumps({
-            "input": {
-                "actor_id": actor_id,
-                "client_mutation_id": "1",
-                "name": page_name,
-                "category_id": category_id,
-                "creation_source": "comet"
-            }
-        }),
-        'doc_id': '5814795813638014'
-    }
-
-    try:
-        r = requests.post("https://www.facebook.com/api/graphql/",
-                          headers=headers, data=payload, timeout=20)
-        res = r.json()
-        if 'errors' in res:
-            err = res['errors'][0].get('message', 'Facebook từ chối')
-            return jsonify({'ok': False, 'message': f'Lỗi FB: {err}'}), 400
-        data_res = res.get('data', {})
-        page_id = ""
-        try:
-            for k, v in data_res.items():
-                if isinstance(v, dict) and 'page_id' in str(v):
-                    m = re.search(r'"page_id":"(\d+)"', json.dumps(v))
-                    if m: page_id = m.group(1); break
-        except Exception: pass
-        if page_id:
-            return jsonify({'ok': True, 'message': f'Tạo Page OK! ID: {page_id}', 'page_id': page_id})
-        return jsonify({'ok': True, 'message': 'Đã gửi yêu cầu tạo Page', 'raw': str(data_res)[:300]})
-    except Exception as e:
-        return jsonify({'ok': False, 'message': f'Lỗi kết nối: {e}'}), 500
-
-
-# ============================================================================
-# ==================== FB TOOL 2: CHUYỂN PAGE ================================
-# ============================================================================
-@app.route('/api/fb/chuyenpage', methods=['POST'])
-def api_fb_chuyenpage():
-    data = request.json or {}
-    cookie = data.get('cookie', '').strip()
-    password = data.get('password', '').strip()
-    page_id = data.get('page_id', '').strip()
-    uid_nhan = data.get('uid_nhan', '').strip()
-
-    if not cookie or not page_id or not uid_nhan:
-        return jsonify({'ok': False, 'message': 'Thiếu Cookie / Page ID / UID nhận!'}), 400
-
-    fb_dtsg, jazoest = get_fb_dtsg(cookie)
-    if not fb_dtsg:
-        return jsonify({'ok': False, 'message': 'Cookie hết hạn!'}), 400
-
-    actor_id = get_fb_actor(cookie)
-    headers = {
-        'cookie': cookie,
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'content-type': 'application/x-www-form-urlencoded',
-        'origin': 'https://www.facebook.com',
-        'referer': f'https://www.facebook.com/{page_id}/settings/'
-    }
-
-    payload = {
-        'fb_dtsg': fb_dtsg,
-        'jazoest': jazoest,
-        'variables': json.dumps({
-            "input": {
-                "client_mutation_id": "1",
-                "actor_id": actor_id,
-                "profile_id": page_id,
-                "target_user_id": uid_nhan,
-                "task_ids": [1, 2, 3, 4, 5],
-                "password": password
-            }
-        }),
-        'doc_id': '5278783472212933'
-    }
-
-    try:
-        r = requests.post("https://www.facebook.com/api/graphql/",
-                          headers=headers, data=payload, timeout=20)
-        res = r.json()
-        if 'errors' in res:
-            err = res['errors'][0].get('message', 'Facebook từ chối')
-            return jsonify({'ok': False, 'message': f'Lỗi FB: {err}'}), 400
-        return jsonify({'ok': True, 'message': f'Đã gửi lời mời QTV Page {page_id} cho UID {uid_nhan}'})
-    except Exception as e:
-        return jsonify({'ok': False, 'message': f'Lỗi: {e}'}), 500
-
-
 @socketio.on('join')
 def on_join(data):
     session_id = data.get('session_id')
@@ -1423,10 +1670,10 @@ def on_join(data):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print("=" * 60)
-    print(" 🚀 TA TOOL WEB - 3 TOOL IG + 2 TOOL FB")
+    print(" 🚀 TA TOOL WEB - 3 TOOL IG (WARMUP) + 2 TOOL FB")
     print(f" 📁 Temp tools: {TEMP_TOOLS_DIR}")
     print(f" 🌐 Port: {port}")
     print(f" 📦 Tools: {list(EMBEDDED_TOOLS.keys())}")
-    print(f" 📘 FB Tools: Reg Page, Chuyển Page")
+    print(f" 📘 FB: Reg Page (multi-thread 10 luồng), Chuyển Page")
     print("=" * 60)
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
