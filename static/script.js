@@ -32,6 +32,7 @@ function createEffectForPanel(canvas) {
     function newFlower() { return { x: Math.random()*W, y: -20, size: 6+Math.random()*8, speedY: 0.4+Math.random()*0.8, speedX: (Math.random()-0.5)*0.6, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.05, color: FLOWER_COLORS[Math.floor(Math.random()*FLOWER_COLORS.length)], type: Math.random()<0.5?'flower':'petal' }; }
     function newHeart() { return { x: Math.random()*W, y: -20, size: 6+Math.random()*7, speedY: 0.6+Math.random()*1, speedX: (Math.random()-0.5)*0.5, color: ['#ef4444','#ec4899','#f43f5e','#fb7185'][Math.floor(Math.random()*4)], alpha: 0.6+Math.random()*0.4, pulse: Math.random()*Math.PI*2 }; }
     function newBolt() { const sx = Math.random()*W, segs = []; let x = sx, y = 0; const endY = H*(0.4+Math.random()*0.5); while (y < endY) { segs.push({x,y}); x += (Math.random()-0.5)*60; y += 10+Math.random()*20; } return { segments: segs, life: 1, fadeSpeed: 0.03+Math.random()*0.02, width: 1+Math.random()*1.5 }; }
+    
     for (let i = 0; i < 8; i++) { const f = newFlower(); f.y = Math.random()*H; flowers.push(f); }
     for (let i = 0; i < 6; i++) { const h = newHeart(); h.y = Math.random()*H; hearts.push(h); }
 
@@ -375,7 +376,21 @@ socket.on('output', d => {
     const t = Object.keys(state).find(k => state[k].sessionId === session_id);
     if (!t) return;
     const term = getTerm(t); if (!term) return;
-    appendLine(term, line, ts);
+    
+    // Highlight dòng đếm Follow thành công (màu xanh lá cây)
+    let isFollowGom = line.includes('Đã gom (') && line.includes('/10)');
+    const div = document.createElement('div');
+    if (isFollowGom) {
+        div.style.color = '#22c55e';
+        div.style.fontWeight = 'bold';
+        div.style.textShadow = '0 0 8px #22c55e';
+    } else {
+        div.className = 'term-line ' + classifyLine(line);
+    }
+    div.innerHTML = `<span class="ts">[${ts||now()}]</span>${escapeHtml(line)}`;
+    term.appendChild(div);
+    term.scrollTop = term.scrollHeight;
+
     const cnt = getOutputCount(t); if (cnt) cnt.textContent = term.children.length + ' dòng';
 });
 
