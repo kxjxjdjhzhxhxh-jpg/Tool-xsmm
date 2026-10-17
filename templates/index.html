@@ -13,7 +13,7 @@
             <span class="logo-icon">🚀</span>
             <div>
                 <h1>TA TOOL WEB MANAGER</h1>
-                <p class="subtitle">3 Tool IG XSMM + 2 Tool FB — TA Tool — MoMo: 0373607456</p>
+                <p class="subtitle">3 Tool IG (Warmup) + 2 Tool FB — MoMo: 0373607456</p>
             </div>
         </div>
         <div class="header-info">
@@ -36,7 +36,7 @@
         {% endfor %}
         <button class="tab-btn" data-tool="fb_regpage" style="--tab-color: #1877f2">
             <span class="tab-dot"></span>
-            FB Reg Page
+            FB Reg Page (10 luồng)
         </button>
         <button class="tab-btn" data-tool="fb_chuyenpage" style="--tab-color: #8b5cf6">
             <span class="tab-dot"></span>
@@ -49,29 +49,23 @@
         {% for key, info in tools.items() %}
         {% set safe_key = key | replace('.', '_') %}
         <section class="tool-panel" data-tool="{{ key }}" data-safe="{{ safe_key }}" style="--panel-color: {{ info.color }}">
-
             <canvas class="fx-canvas-form"></canvas>
-
             <div class="config-form" id="form-{{ safe_key }}">
                 <div class="form-title">⚙️ CẤU HÌNH — {{ info.name }}</div>
-
                 <div class="form-row">
                     <label>🔑 Access Token XSMM:</label>
-                    <input type="text" class="cfg-input cfg-token" placeholder="Dán token XSMM (Bearer token)" autocomplete="off">
+                    <input type="text" class="cfg-input cfg-token" placeholder="Dán token XSMM" autocomplete="off">
                 </div>
-
                 {% if key == 'xsmmigv5.2' %}
                 <div class="form-row">
                     <label>🍪 Cookie Check Jobs (tùy chọn):</label>
                     <textarea class="cfg-input cfg-cookiecheck" rows="2" placeholder="Để trống = dùng cookie của từng nick"></textarea>
                 </div>
                 {% endif %}
-
                 <div class="form-row">
-                    <label>📋 Danh sách Cookie IG/FB <small>(mỗi dòng 1 nick: <code>cookie</code> hoặc <code>cookie|proxy</code>)</small>:</label>
+                    <label>📋 Danh sách Cookie IG <small>(mỗi dòng 1 nick: <code>cookie</code> hoặc <code>cookie|proxy</code>)</small>:</label>
                     <textarea class="cfg-input cfg-cookies" rows="6" placeholder="sessionid=abc; csrftoken=xyz&#10;sessionid=def; csrftoken=uvw|http://user:pass@1.2.3.4:8080"></textarea>
                 </div>
-
                 <div class="form-row">
                     <label>🎯 Chọn loại Jobs:</label>
                     <div class="checkbox-group">
@@ -80,7 +74,6 @@
                         <label class="cb-item"><input type="checkbox" class="cfg-job cfg-job-comment"> 💬 Comment</label>
                     </div>
                 </div>
-
                 <div class="form-row form-row-inline">
                     <label>⏱️ Delay (giây):</label>
                     <div class="inline-inputs">
@@ -89,7 +82,6 @@
                         <span>Cmt <input type="number" class="cfg-input cfg-delay-comment" value="20" min="10" style="width:70px"></span>
                     </div>
                 </div>
-
                 {% if key == 'xsmmv3.2' %}
                 <div class="form-row form-row-inline">
                     <label>🔀 Cấu hình luồng:</label>
@@ -100,7 +92,6 @@
                     </div>
                 </div>
                 {% endif %}
-
                 {% if key == 'xsmmigv5.2' %}
                 <div class="form-row form-row-inline">
                     <label>🔀 Cấu hình:</label>
@@ -109,10 +100,9 @@
                     </div>
                 </div>
                 {% endif %}
-
                 {% if key == '11223' %}
                 <div class="form-row form-row-inline">
-                    <label>🎬 Chế độ (Tool 3):</label>
+                    <label>🎬 Chế độ:</label>
                     <div class="inline-inputs">
                         <select class="cfg-input cfg-mode" style="width:220px">
                             <option value="1">1. Like</option>
@@ -123,7 +113,6 @@
                     </div>
                 </div>
                 {% endif %}
-
                 <div class="form-actions">
                     <button class="btn btn-start" data-tool="{{ key }}"><span class="btn-icon">▶</span> Chạy Tool</button>
                     <button class="btn btn-stop" data-tool="{{ key }}" disabled><span class="btn-icon">⏹</span> Dừng</button>
@@ -131,13 +120,11 @@
                     <button class="btn btn-save" data-tool="{{ key }}" disabled><span class="btn-icon">💾</span> Lưu Log</button>
                 </div>
             </div>
-
             <div class="session-info" data-tool="{{ key }}">
                 <span class="badge status-badge idle">● IDLE</span>
                 <span class="session-id"></span>
                 <span class="output-count">0 dòng</span>
             </div>
-
             <div class="terminal-wrap">
                 <div class="terminal-header">
                     <div class="dots"><span></span><span></span><span></span></div>
@@ -146,7 +133,6 @@
                 <div class="terminal" id="term-{{ safe_key }}"></div>
                 <canvas class="fx-canvas-term"></canvas>
             </div>
-
             <div class="input-bar">
                 <input type="text" class="stdin-input" placeholder="Nhập input thủ công (nếu cần). Enter để gửi" data-tool="{{ key }}" disabled>
                 <button class="btn btn-send" data-tool="{{ key }}" disabled>Gửi ⏎</button>
@@ -154,41 +140,70 @@
         </section>
         {% endfor %}
 
-        <!-- TOOL 4: FB REG PAGE -->
+        <!-- TOOL 4: FB REG PAGE (MULTI-THREAD) -->
         <section class="tool-panel" data-tool="fb_regpage" data-safe="fb_regpage" style="--panel-color: #1877f2">
             <canvas class="fx-canvas-form"></canvas>
             <div class="config-form">
-                <div class="form-title">📘 FB REG PAGE — Tạo Page Facebook</div>
+                <div class="form-title">📘 FB REG PAGE — Đa luồng (10 luồng)</div>
 
                 <div class="form-row">
-                    <label>🍪 Cookie Facebook <small>(dạng: c_user=...; xs=...;)</small>:</label>
-                    <textarea class="cfg-input" id="fb_reg_cookie" rows="3" placeholder="c_user=1000xxx; xs=...; datr=...;"></textarea>
+                    <label>📋 Danh sách Nick <small>(mỗi dòng: <code>cookie|proxy</code> hoặc <code>cookie|</code> nếu không proxy)</small>:</label>
+                    <textarea class="cfg-input" id="fb_reg_tasks" rows="6" placeholder="c_user=1000xxx; xs=abc...|27.64.254.37:8080:user:pass&#10;c_user=1000yyy; xs=def...|117.6.234.108:3128:user:pass"></textarea>
                 </div>
 
                 <div class="form-row">
-                    <label>📝 Tên Page cần tạo:</label>
-                    <input type="text" class="cfg-input" id="fb_reg_name" placeholder="VD: Shop Quần Áo ABC" autocomplete="off">
+                    <label>📝 Danh sách Tên Page <small>(mỗi dòng 1 tên — sẽ ghép tương ứng với nick)</small>:</label>
+                    <textarea class="cfg-input" id="fb_reg_names" rows="6" placeholder="Michelle Howard&#10;Carol Jones&#10;Debra Gonzalez&#10;Donald Anderson"></textarea>
                 </div>
 
                 <div class="form-row form-row-inline">
                     <label>📂 Category ID:</label>
                     <div class="inline-inputs">
                         <span><input type="text" class="cfg-input" id="fb_reg_cat" value="2200" style="width:100px"></span>
-                        <span style="color:var(--text-dim);font-size:11px">(2200=Brand, 1807=Store, 2213=Personal Blog...)</span>
+                        <span>🔢 Số luồng <input type="number" class="cfg-input" id="fb_reg_threads" value="10" min="1" max="30" style="width:70px"></span>
                     </div>
                 </div>
 
+                <!-- Thống kê giống ảnh -->
+                <div class="fb-stats">
+                    <div class="fb-stat"><span class="fb-stat-label">ACC</span><span class="fb-stat-val" id="fb_stat_acc">0</span></div>
+                    <div class="fb-stat"><span class="fb-stat-label">PAGE OK</span><span class="fb-stat-val green" id="fb_stat_ok">0</span></div>
+                    <div class="fb-stat"><span class="fb-stat-label">LỖI</span><span class="fb-stat-val red" id="fb_stat_err">0</span></div>
+                    <div class="fb-stat"><span class="fb-stat-label">LUỒNG</span><span class="fb-stat-val" id="fb_stat_threads">0/10</span></div>
+                    <div class="fb-stat"><span class="fb-stat-label">THỜI GIAN</span><span class="fb-stat-val" id="fb_stat_time">00:00:00</span></div>
+                </div>
+
                 <div class="form-actions">
-                    <button class="btn btn-start" id="btn_fb_reg"><span class="btn-icon">▶</span> Tạo Page</button>
+                    <button class="btn btn-start" id="btn_fb_reg"><span class="btn-icon">▶</span> Bắt đầu chạy</button>
+                    <button class="btn btn-stop" id="btn_fb_reg_stop" disabled><span class="btn-icon">⏹</span> Dừng</button>
+                    <button class="btn btn-clear" id="btn_fb_reg_clear"><span class="btn-icon">🧹</span> Xóa bảng</button>
+                    <button class="btn btn-save" id="btn_fb_reg_export"><span class="btn-icon">💾</span> Xuất TXT</button>
                 </div>
             </div>
 
             <div class="terminal-wrap">
                 <div class="terminal-header">
                     <div class="dots"><span></span><span></span><span></span></div>
-                    <div class="term-title">FB Reg Page — output</div>
+                    <div class="term-title">FB Reg Page — Bảng tiến trình</div>
                 </div>
-                <div class="terminal" id="term-fb_regpage"></div>
+                <div class="fb-table-wrap">
+                    <table class="fb-table" id="fb_reg_table">
+                        <thead>
+                            <tr>
+                                <th>D</th>
+                                <th>Nick</th>
+                                <th>UID Page</th>
+                                <th>Tên Page</th>
+                                <th>IP</th>
+                                <th>Múi giờ</th>
+                                <th>Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fb_reg_tbody">
+                            <tr><td colspan="7" style="text-align:center;color:#888;padding:20px">Chưa có dữ liệu...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
                 <canvas class="fx-canvas-term"></canvas>
             </div>
         </section>
@@ -198,36 +213,30 @@
             <canvas class="fx-canvas-form"></canvas>
             <div class="config-form">
                 <div class="form-title">📘 FB CHUYỂN PAGE — Chuyển quyền QTV</div>
-
                 <div class="form-row">
-                    <label>🍪 Cookie Nick Chuyển <small>(đang cầm Page)</small>:</label>
+                    <label>🍪 Cookie Nick Chuyển:</label>
                     <textarea class="cfg-input" id="fb_chuyen_cookie" rows="3" placeholder="c_user=1000xxx; xs=...;"></textarea>
                 </div>
-
                 <div class="form-row">
-                    <label>🔒 Mật khẩu Nick Chuyển <small>(để xác thực)</small>:</label>
+                    <label>🔒 Mật khẩu Nick Chuyển:</label>
                     <input type="password" class="cfg-input" id="fb_chuyen_pass" placeholder="Mật khẩu FB" autocomplete="off">
                 </div>
-
                 <div class="form-row form-row-inline">
                     <label>🆔 Page ID:</label>
                     <div class="inline-inputs">
                         <span><input type="text" class="cfg-input" id="fb_chuyen_pageid" placeholder="1000xxx" style="width:180px"></span>
                     </div>
                 </div>
-
                 <div class="form-row form-row-inline">
                     <label>👤 UID Nhận:</label>
                     <div class="inline-inputs">
                         <span><input type="text" class="cfg-input" id="fb_chuyen_uid" placeholder="1000xxx" style="width:180px"></span>
                     </div>
                 </div>
-
                 <div class="form-actions">
                     <button class="btn btn-start" id="btn_fb_chuyen"><span class="btn-icon">▶</span> Chuyển Page</button>
                 </div>
             </div>
-
             <div class="terminal-wrap">
                 <div class="terminal-header">
                     <div class="dots"><span></span><span></span><span></span></div>
