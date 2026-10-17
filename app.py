@@ -26,6 +26,20 @@ os.makedirs(SESSIONS_DIR, exist_ok=True)
 TEMP_TOOLS_DIR = os.path.join(tempfile.gettempdir(), "ta_tool_embedded")
 os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
 
+# ================== BIẾN DÙNG CHUNG ==================
+sessions = {}
+sessions_lock = threading.Lock()
+
+FB_REG_STATE = {
+    "running": False,
+    "results": [],
+    "threads": 0,
+    "running_threads": 0,
+    "start_time": 0,
+    "total_success": 0,
+    "total_fail": 0,
+}
+FB_REG_LOCK = threading.Lock()
 
 # ============================================================================
 # ==================== TOOL 1: xsmmv3.2.py (WARMUP) =========================
@@ -119,7 +133,7 @@ def check_cookie_ig(cookie, proxy=None):
     except: return "{}"
 
 def ig_warmup(session, cookie, proxy, tenfb):
-    thread_safe_print(f"{cyan}[*] [{tenfb}] Warmup (follow + xem feed)...{reset}")
+    thread_safe_print(f"{cyan}[*] [{tenfb}] Warmup...{reset}")
     try:
         session.get("https://www.instagram.com/", impersonate="chrome120", timeout=15)
         time.sleep(random.uniform(3, 6))
@@ -481,7 +495,6 @@ if __name__ == "__main__":
     main()
 '''
 
-
 # ============================================================================
 # ==================== TOOL 2: xsmmigv5.2.py (WARMUP + ĐẾM FL) ==============
 # ============================================================================
@@ -804,7 +817,6 @@ def main():
                 print(f"{red}[!] Cookie die{reset}"); mangcookie.pop(l); continue
             print(f"{green}[+] [{tenfb} | {idfb}]{reset}")
 
-            # Warmup
             warmup_sess = c_requests.Session()
             wp = format_proxy(p)
             if wp: warmup_sess.proxies = wp
@@ -824,7 +836,7 @@ def main():
             except Exception: pass
 
             max_j = 0
-            cache = []  # BIẾN LƯU TASK FOLLOW
+            cache = []
             while max_j < doi:
                 jt = random.choice(listnv)
                 jl = random.randint(3, 5); jdt = 0
@@ -1187,23 +1199,11 @@ EMBEDDED_TOOLS = {
     },
 }
 
+TOOL_INFO = {k: {"name": v["name"], "desc": v["desc"], "color": v["color"]} for k, v in EMBEDDED_TOOLS.items()}
 
 # ============================================================================
 # ==================== FB REG PAGE (MULTI-THREAD) ============================
 # ============================================================================
-FB_REG_STATE = {
-    "running": False,
-    "results": [],
-    "threads": 0,
-    "running_threads": 0,
-    "start_time": 0,
-    "total_success": 0,
-    "total_fail": 0,
-}
-
-FB_REG_LOCK = threading.Lock()
-
-
 def fb_get_dtsg(cookie):
     try:
         headers = {
@@ -1218,7 +1218,6 @@ def fb_get_dtsg(cookie):
         if alt: return alt.group(1), "22"
     except Exception: pass
     return None, None
-
 
 def fb_create_page_worker(idx, cookie, page_name, category_id, proxy, result_list):
     result = {
@@ -1294,7 +1293,6 @@ def fb_create_page_worker(idx, cookie, page_name, category_id, proxy, result_lis
         result["status"] = f"Lỗi: {str(e)[:50]}"
         result_list.append(result)
 
-
 def run_fb_reg_page_thread(task_queue, result_list, threads_count):
     FB_REG_STATE["running"] = True
     FB_REG_STATE["start_time"] = time.time()
@@ -1335,7 +1333,6 @@ def run_fb_reg_page_thread(task_queue, result_list, threads_count):
         "elapsed": int(time.time() - FB_REG_STATE["start_time"]),
     })
 
-
 @app.route('/api/fb_reg_start', methods=['POST'])
 def api_fb_reg_start():
     if FB_REG_STATE["running"]: return jsonify({"ok": False, "error": "Đang chạy rồi!"})
@@ -1358,12 +1355,10 @@ def api_fb_reg_start():
     thread.start()
     return jsonify({"ok": True, "message": f"Đã bắt đầu {len(tasks)} task với {threads_count} luồng"})
 
-
 @app.route('/api/fb_reg_stop', methods=['POST'])
 def api_fb_reg_stop():
     FB_REG_STATE["running"] = False
     return jsonify({"ok": True})
-
 
 @app.route('/api/fb_reg_stats')
 def api_fb_reg_stats():
@@ -1373,7 +1368,6 @@ def api_fb_reg_stats():
         "fail": FB_REG_STATE["total_fail"],
         "elapsed": int(time.time() - FB_REG_STATE["start_time"]) if FB_REG_STATE["start_time"] else 0,
     })
-
 
 # ============================================================================
 # ==================== FLASK ROUTES ==========================================
@@ -1386,7 +1380,6 @@ def ensure_tool_file(tool_key):
         with open(filepath, "w", encoding="utf-8") as f: f.write(info["code"])
         return filepath, None
     except Exception as e: return None, f"Không tạo được file: {e}"
-
 
 def read_process_output(session_id, process):
     try:
@@ -1409,7 +1402,6 @@ def read_process_output(session_id, process):
             if session_id in sessions: sessions[session_id]["status"] = "stopped" if rc == 0 else f"exited({rc})"
         socketio.emit('status', {'session_id': session_id, 'status': 'stopped', 'return_code': rc, 'message': f'Tool kết thúc (code {rc})'}, room=session_id)
 
-
 def start_tool_process(session_id, tool_key):
     filepath, err = ensure_tool_file(tool_key)
     if err: return None, err
@@ -1421,7 +1413,6 @@ def start_tool_process(session_id, tool_key):
         cwd=TEMP_TOOLS_DIR, env=env, bufsize=1, universal_newlines=True, encoding='utf-8', errors='replace'
     )
     return process, None
-
 
 @app.route('/')
 def index():
