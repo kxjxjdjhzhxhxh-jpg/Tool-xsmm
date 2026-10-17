@@ -9,7 +9,6 @@ import tempfile
 import random
 import string
 import re
-import hashlib
 from datetime import datetime
 from queue import Queue
 from flask import Flask, render_template, request, jsonify
@@ -29,235 +28,7 @@ os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
 
 
 # ============================================================================
-# ==================== TOOL 4: FB REG PAGE (MULTI-THREAD) ====================
-# ============================================================================
-FB_REG_STATE = {
-    "running": False,
-    "results": [],
-    "threads": 0,
-    "running_threads": 0,
-    "start_time": 0,
-    "total_success": 0,
-    "total_fail": 0,
-}
-
-FB_REG_LOCK = threading.Lock()
-
-
-def fb_get_dtsg(cookie):
-    try:
-        headers = {
-            'cookie': cookie,
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-        r = requests.get('https://www.facebook.com/settings', headers=headers, timeout=15)
-        dtsg = re.search(r'name="fb_dtsg" value="(.*?)"', r.text)
-        jz = re.search(r'name="jazoest" value="(.*?)"', r.text)
-        if dtsg and jz: return dtsg.group(1), jz.group(1)
-        alt = re.search(r'"DTSGInitialData",\[\],{"token":"(.*?)"}', r.text)
-        if alt: return alt.group(1), "22"
-    except Exception: pass
-    return None, None
-
-
-def fb_create_page_worker(idx, cookie, page_name, category_id, proxy, result_list):
-    """Worker tạo 1 page FB"""
-    result = {
-        "idx": idx,
-        "uid": "",
-        "page_id": "",
-        "page_name": page_name,
-        "ip": proxy or "Direct",
-        "timezone": "Asia/Ho_Chi_Minh",
-        "status": "Đang xử lý...",
-        "ok": False,
-    }
-
-    try:
-        # Lấy UID từ cookie
-        m = re.search(r'c_user=(\d+)', cookie)
-        if m: result["uid"] = m.group(1)
-
-        # Proxy test
-        proxies = None
-        if proxy:
-            p = proxy.strip()
-            if "://" not in p: p = "http://" + p
-            proxies = {"http": p, "https": p}
-
-        # Lấy dtsg
-        headers = {
-            'cookie': cookie,
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        }
-        try:
-            r = requests.get('https://www.facebook.com/settings', headers=headers, proxies=proxies, timeout=20)
-            dtsg = re.search(r'name="fb_dtsg" value="(.*?)"', r.text)
-            jz = re.search(r'name="jazoest" value="(.*?)"', r.text)
-            if dtsg and jz:
-                fb_dtsg, jazoest = dtsg.group(1), jz.group(1)
-            else:
-                alt = re.search(r'"DTSGInitialData",\[\],{"token":"(.*?)"}', r.text)
-                if alt: fb_dtsg, jazoest = alt.group(1), "22"
-                else:
-                    result["status"] = "Cookie die / không lấy được fb_dtsg"
-                    result_list.append(result)
-                    return
-        except Exception as e:
-            result["status"] = f"Lỗi kết nối: {str(e)[:50]}"
-            result_list.append(result)
-            return
-
-        # Gọi GraphQL tạo page
-        headers2 = {
-            'cookie': cookie,
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'content-type': 'application/x-www-form-urlencoded',
-            'origin': 'https://www.facebook.com',
-            'referer': 'https://www.facebook.com/pages/creation/'
-        }
-        payload = {
-            'fb_dtsg': fb_dtsg,
-            'jazoest': jazoest,
-            'variables': json.dumps({
-                "input": {
-                    "actor_id": result["uid"],
-                    "client_mutation_id": "1",
-                    "name": page_name,
-                    "category_id": category_id,
-                    "creation_source": "comet"
-                }
-            }),
-            'doc_id': '5814795813638014'
-        }
-        try:
-            r = requests.post("https://www.facebook.com/api/graphql/", headers=headers2, data=payload, proxies=proxies, timeout=25)
-            res = r.json()
-            if 'errors' in res:
-                result["status"] = f"FB lỗi: {res['errors'][0].get('message', '')[:80]}"
-                result_list.append(result)
-                return
-            data = res.get('data', {})
-            pid_match = re.search(r'"page_id":"(\d+)"', json.dumps(data))
-            if pid_match:
-                result["page_id"] = pid_match.group(1)
-                result["status"] = "Tạo OK"
-                result["ok"] = True
-            else:
-                result["status"] = "Không có page_id (có thể fail)"
-                result_list.append(result)
-                return
-        except Exception as e:
-            result["status"] = f"Lỗi GraphQL: {str(e)[:50]}"
-            result_list.append(result)
-            return
-
-        result_list.append(result)
-    except Exception as e:
-        result["status"] = f"Lỗi: {str(e)[:50]}"
-        result_list.append(result)
-
-
-def run_fb_reg_page_thread(task_queue, result_list, threads_count):
-    """Chạy đa luồng"""
-    FB_REG_STATE["running"] = True
-    FB_REG_STATE["start_time"] = time.time()
-
-    def worker():
-        while True:
-            try:
-                task = task_queue.get_nowait()
-            except:
-                break
-            idx, cookie, page_name, category_id, proxy = task
-            try:
-                fb_create_page_worker(idx, cookie, page_name, category_id, proxy, result_list)
-                with FB_REG_LOCK:
-                    latest = result_list[-1] if result_list else None
-                    if latest and latest.get("ok"):
-                        FB_REG_STATE["total_success"] += 1
-                    else:
-                        FB_REG_STATE["total_fail"] += 1
-                    socketio.emit('fb_reg_update', {
-                        "result": latest,
-                        "stats": {
-                            "success": FB_REG_STATE["total_success"],
-                            "fail": FB_REG_STATE["total_fail"],
-                            "elapsed": int(time.time() - FB_REG_STATE["start_time"]),
-                        }
-                    })
-            except Exception as e:
-                with FB_REG_LOCK:
-                    FB_REG_STATE["total_fail"] += 1
-            finally:
-                task_queue.task_done()
-
-    threads = []
-    for _ in range(threads_count):
-        t = threading.Thread(target=worker, daemon=True)
-        t.start()
-        threads.append(t)
-
-    for t in threads:
-        t.join()
-
-    FB_REG_STATE["running"] = False
-    socketio.emit('fb_reg_done', {
-        "success": FB_REG_STATE["total_success"],
-        "fail": FB_REG_STATE["total_fail"],
-        "elapsed": int(time.time() - FB_REG_STATE["start_time"]),
-    })
-
-
-@app.route('/api/fb_reg_start', methods=['POST'])
-def api_fb_reg_start():
-    if FB_REG_STATE["running"]:
-        return jsonify({"ok": False, "error": "Đang chạy rồi!"})
-
-    data = request.json or {}
-    tasks = data.get('tasks', [])
-    threads_count = int(data.get('threads', 10))
-
-    if not tasks:
-        return jsonify({"ok": False, "error": "Không có task"})
-
-    FB_REG_STATE["running"] = True
-    FB_REG_STATE["results"] = []
-    FB_REG_STATE["total_success"] = 0
-    FB_REG_STATE["total_fail"] = 0
-
-    task_queue = Queue()
-    for i, t in enumerate(tasks):
-        task_queue.put((i + 1, t['cookie'], t['page_name'], t.get('category_id', '2200'), t.get('proxy', '')))
-
-    result_list = []
-    thread = threading.Thread(
-        target=run_fb_reg_page_thread,
-        args=(task_queue, result_list, threads_count),
-        daemon=True
-    )
-    thread.start()
-
-    return jsonify({"ok": True, "message": f"Đã bắt đầu {len(tasks)} task với {threads_count} luồng"})
-
-
-@app.route('/api/fb_reg_stop', methods=['POST'])
-def api_fb_reg_stop():
-    FB_REG_STATE["running"] = False
-    return jsonify({"ok": True})
-
-
-@app.route('/api/fb_reg_stats')
-def api_fb_reg_stats():
-    return jsonify({
-        "running": FB_REG_STATE["running"],
-        "success": FB_REG_STATE["total_success"],
-        "fail": FB_REG_STATE["total_fail"],
-        "elapsed": int(time.time() - FB_REG_STATE["start_time"]) if FB_REG_STATE["start_time"] else 0,
-    })
-
-# ============================================================================
-# ==================== TOOL 1: xsmmv3.2.py (CÓ WARMUP) ======================
+# ==================== TOOL 1: xsmmv3.2.py (WARMUP) =========================
 # ============================================================================
 TOOL_CODE_XSMMV32 = r'''import os
 import sys
@@ -347,16 +118,11 @@ def check_cookie_ig(cookie, proxy=None):
     try: return c_requests.get(url, headers=headers, proxies=format_proxy(proxy), impersonate="chrome120", timeout=30).text
     except: return "{}"
 
-# ==================== WARMUP MODULE ====================
 def ig_warmup(session, cookie, proxy, tenfb):
-    """Warmup: follow + xem feed + delay ngẫu nhiên"""
     thread_safe_print(f"{cyan}[*] [{tenfb}] Warmup (follow + xem feed)...{reset}")
     try:
-        # 1. Xem feed trang chủ
         session.get("https://www.instagram.com/", impersonate="chrome120", timeout=15)
         time.sleep(random.uniform(3, 6))
-
-        # 2. Follow vài user lớn
         targets = ["instagram", "cristiano", "natgeo", "therock", "leomessi"]
         for t in random.sample(targets, random.randint(1, 2)):
             try:
@@ -381,11 +147,8 @@ def ig_warmup(session, cookie, proxy, tenfb):
                 thread_safe_print(f"{green}[+] [{tenfb}] Follow @{t}{reset}")
                 time.sleep(random.uniform(4, 8))
             except: pass
-
-        # 3. Xem thêm feed + nghỉ ngẫu nhiên
         session.get("https://www.instagram.com/explore/", impersonate="chrome120", timeout=15)
         time.sleep(random.uniform(5, 10))
-
         thread_safe_print(f"{green}[+] [{tenfb}] Warmup done{reset}")
         return True
     except Exception as e:
@@ -537,7 +300,6 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
     px = f" | Proxy: {proxy}" if proxy else ""
     thread_safe_print(f"{green}[+] NICK [{tenfb} | {idfb}{px}]{reset}")
 
-    # WARMUP
     warmup_sess = c_requests.Session()
     wp = format_proxy(proxy)
     if wp: warmup_sess.proxies = wp
@@ -719,8 +481,9 @@ if __name__ == "__main__":
     main()
 '''
 
+
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py (CÓ WARMUP) ====================
+# ==================== TOOL 2: xsmmigv5.2.py (WARMUP + ĐẾM FL) ==============
 # ============================================================================
 TOOL_CODE_XSMMIGV52 = r'''import os
 import sys
@@ -827,7 +590,6 @@ def check_cookie_ig(cookie, proxy=None, profile=None):
     try: return c_requests.get(url, headers=h, proxies=format_proxy(proxy), impersonate=profile["impersonate"], timeout=30).text
     except Exception: return "{}"
 
-# WARMUP
 def ig_warmup_v52(session, cookie, profile):
     print(f"{cyan}[*] Warmup...{reset}")
     try:
@@ -1062,6 +824,7 @@ def main():
             except Exception: pass
 
             max_j = 0
+            cache = []  # BIẾN LƯU TASK FOLLOW
             while max_j < doi:
                 jt = random.choice(listnv)
                 jl = random.randint(3, 5); jdt = 0
@@ -1092,8 +855,18 @@ def main():
                             r = follow(tid, c, csf, lj, proxy=p, profile=prof)
                             max_j += 1; jdt += 1
                             ok, _ = parse_resp(r)
-                            if ok: solo = 0
-                            else: solo += 1
+                            
+                            if ok: 
+                                solo = 0
+                                cache.append(nv.get('id'))
+                                print(f"   [+] Follow OK -> Đã gom ({len(cache)}/10)")
+                                if len(cache) >= 10:
+                                    gui_nhan_xu("instagram_follow", cache, idfb, target_ck, xsmm)
+                                    cache = [] # Reset
+                            else:
+                                print(f"   [-] Fail (Private/Block)")
+                                solo += 1
+                                
                             time.sleep(random.randint(*dly['follow']) + random.uniform(0, 5))
                             if solo > 4 or jdt >= jl or max_j >= doi: break
                 elif jt == 'instagram_comment':
@@ -1121,7 +894,7 @@ if __name__ == "__main__":
 '''
 
 # ============================================================================
-# ==================== TOOL 3: 11223.py (CÓ WARMUP) =========================
+# ==================== TOOL 3: 11223.py (WARMUP) =============================
 # ============================================================================
 TOOL_CODE_11223 = r'''import time
 import json
@@ -1414,26 +1187,205 @@ EMBEDDED_TOOLS = {
     },
 }
 
-sessions = {}
-sessions_lock = threading.Lock()
-
-TOOL_INFO = {k: {"name": v["name"], "desc": v["desc"], "color": v["color"]}
-             for k, v in EMBEDDED_TOOLS.items()}
 
 # ============================================================================
-# ==================== FLASK ROUTES - 3 TOOL IG ==============================
+# ==================== FB REG PAGE (MULTI-THREAD) ============================
+# ============================================================================
+FB_REG_STATE = {
+    "running": False,
+    "results": [],
+    "threads": 0,
+    "running_threads": 0,
+    "start_time": 0,
+    "total_success": 0,
+    "total_fail": 0,
+}
+
+FB_REG_LOCK = threading.Lock()
+
+
+def fb_get_dtsg(cookie):
+    try:
+        headers = {
+            'cookie': cookie,
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        r = requests.get('https://www.facebook.com/settings', headers=headers, timeout=15)
+        dtsg = re.search(r'name="fb_dtsg" value="(.*?)"', r.text)
+        jz = re.search(r'name="jazoest" value="(.*?)"', r.text)
+        if dtsg and jz: return dtsg.group(1), jz.group(1)
+        alt = re.search(r'"DTSGInitialData",\[\],{"token":"(.*?)"}', r.text)
+        if alt: return alt.group(1), "22"
+    except Exception: pass
+    return None, None
+
+
+def fb_create_page_worker(idx, cookie, page_name, category_id, proxy, result_list):
+    result = {
+        "idx": idx, "uid": "", "page_id": "", "page_name": page_name,
+        "ip": proxy or "Direct", "timezone": "Asia/Ho_Chi_Minh",
+        "status": "Đang xử lý...", "ok": False,
+    }
+    try:
+        m = re.search(r'c_user=(\d+)', cookie)
+        if m: result["uid"] = m.group(1)
+
+        proxies = None
+        if proxy:
+            p = proxy.strip()
+            if "://" not in p: p = "http://" + p
+            proxies = {"http": p, "https": p}
+
+        headers = {
+            'cookie': cookie,
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+        try:
+            r = requests.get('https://www.facebook.com/settings', headers=headers, proxies=proxies, timeout=20)
+            dtsg = re.search(r'name="fb_dtsg" value="(.*?)"', r.text)
+            jz = re.search(r'name="jazoest" value="(.*?)"', r.text)
+            if dtsg and jz:
+                fb_dtsg, jazoest = dtsg.group(1), jz.group(1)
+            else:
+                alt = re.search(r'"DTSGInitialData",\[\],{"token":"(.*?)"}', r.text)
+                if alt: fb_dtsg, jazoest = alt.group(1), "22"
+                else:
+                    result["status"] = "Cookie die / không lấy được fb_dtsg"
+                    result_list.append(result); return
+        except Exception as e:
+            result["status"] = f"Lỗi kết nối: {str(e)[:50]}"
+            result_list.append(result); return
+
+        headers2 = {
+            'cookie': cookie,
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'content-type': 'application/x-www-form-urlencoded',
+            'origin': 'https://www.facebook.com',
+            'referer': 'https://www.facebook.com/pages/creation/'
+        }
+        payload = {
+            'fb_dtsg': fb_dtsg, 'jazoest': jazoest,
+            'variables': json.dumps({
+                "input": {
+                    "actor_id": result["uid"], "client_mutation_id": "1",
+                    "name": page_name, "category_id": category_id, "creation_source": "comet"
+                }
+            }),
+            'doc_id': '5814795813638014'
+        }
+        try:
+            r = requests.post("https://www.facebook.com/api/graphql/", headers=headers2, data=payload, proxies=proxies, timeout=25)
+            res = r.json()
+            if 'errors' in res:
+                result["status"] = f"FB lỗi: {res['errors'][0].get('message', '')[:80]}"
+                result_list.append(result); return
+            data = res.get('data', {})
+            pid_match = re.search(r'"page_id":"(\d+)"', json.dumps(data))
+            if pid_match:
+                result["page_id"] = pid_match.group(1)
+                result["status"] = "Tạo OK"
+                result["ok"] = True
+            else:
+                result["status"] = "Không có page_id (fail)"
+        except Exception as e:
+            result["status"] = f"Lỗi GraphQL: {str(e)[:50]}"
+        result_list.append(result)
+    except Exception as e:
+        result["status"] = f"Lỗi: {str(e)[:50]}"
+        result_list.append(result)
+
+
+def run_fb_reg_page_thread(task_queue, result_list, threads_count):
+    FB_REG_STATE["running"] = True
+    FB_REG_STATE["start_time"] = time.time()
+
+    def worker():
+        while True:
+            try: task = task_queue.get_nowait()
+            except: break
+            idx, cookie, page_name, category_id, proxy = task
+            try:
+                fb_create_page_worker(idx, cookie, page_name, category_id, proxy, result_list)
+                with FB_REG_LOCK:
+                    latest = result_list[-1] if result_list else None
+                    if latest and latest.get("ok"): FB_REG_STATE["total_success"] += 1
+                    else: FB_REG_STATE["total_fail"] += 1
+                    socketio.emit('fb_reg_update', {
+                        "result": latest,
+                        "stats": {
+                            "success": FB_REG_STATE["total_success"],
+                            "fail": FB_REG_STATE["total_fail"],
+                            "elapsed": int(time.time() - FB_REG_STATE["start_time"]),
+                        }
+                    })
+            except Exception as e:
+                with FB_REG_LOCK: FB_REG_STATE["total_fail"] += 1
+            finally: task_queue.task_done()
+
+    threads = []
+    for _ in range(threads_count):
+        t = threading.Thread(target=worker, daemon=True)
+        t.start(); threads.append(t)
+    for t in threads: t.join()
+
+    FB_REG_STATE["running"] = False
+    socketio.emit('fb_reg_done', {
+        "success": FB_REG_STATE["total_success"],
+        "fail": FB_REG_STATE["total_fail"],
+        "elapsed": int(time.time() - FB_REG_STATE["start_time"]),
+    })
+
+
+@app.route('/api/fb_reg_start', methods=['POST'])
+def api_fb_reg_start():
+    if FB_REG_STATE["running"]: return jsonify({"ok": False, "error": "Đang chạy rồi!"})
+    data = request.json or {}
+    tasks = data.get('tasks', [])
+    threads_count = int(data.get('threads', 10))
+    if not tasks: return jsonify({"ok": False, "error": "Không có task"})
+
+    FB_REG_STATE["running"] = True
+    FB_REG_STATE["results"] = []
+    FB_REG_STATE["total_success"] = 0
+    FB_REG_STATE["total_fail"] = 0
+
+    task_queue = Queue()
+    for i, t in enumerate(tasks):
+        task_queue.put((i + 1, t['cookie'], t['page_name'], t.get('category_id', '2200'), t.get('proxy', '')))
+
+    result_list = []
+    thread = threading.Thread(target=run_fb_reg_page_thread, args=(task_queue, result_list, threads_count), daemon=True)
+    thread.start()
+    return jsonify({"ok": True, "message": f"Đã bắt đầu {len(tasks)} task với {threads_count} luồng"})
+
+
+@app.route('/api/fb_reg_stop', methods=['POST'])
+def api_fb_reg_stop():
+    FB_REG_STATE["running"] = False
+    return jsonify({"ok": True})
+
+
+@app.route('/api/fb_reg_stats')
+def api_fb_reg_stats():
+    return jsonify({
+        "running": FB_REG_STATE["running"],
+        "success": FB_REG_STATE["total_success"],
+        "fail": FB_REG_STATE["total_fail"],
+        "elapsed": int(time.time() - FB_REG_STATE["start_time"]) if FB_REG_STATE["start_time"] else 0,
+    })
+
+
+# ============================================================================
+# ==================== FLASK ROUTES ==========================================
 # ============================================================================
 def ensure_tool_file(tool_key):
-    if tool_key not in EMBEDDED_TOOLS:
-        return None, f"Tool không hợp lệ: {tool_key}"
+    if tool_key not in EMBEDDED_TOOLS: return None, f"Tool không hợp lệ: {tool_key}"
     info = EMBEDDED_TOOLS[tool_key]
     filepath = os.path.join(TEMP_TOOLS_DIR, info["filename"])
     try:
-        with open(filepath, "w", encoding="utf-8") as f:
-            f.write(info["code"])
+        with open(filepath, "w", encoding="utf-8") as f: f.write(info["code"])
         return filepath, None
-    except Exception as e:
-        return None, f"Không tạo được file: {e}"
+    except Exception as e: return None, f"Không tạo được file: {e}"
 
 
 def read_process_output(session_id, process):
@@ -1447,144 +1399,56 @@ def read_process_output(session_id, process):
                         sessions[session_id]["output_lines"].append(line)
                         if len(sessions[session_id]["output_lines"]) > 5000:
                             sessions[session_id]["output_lines"] = sessions[session_id]["output_lines"][-5000:]
-                socketio.emit('output', {
-                    'session_id': session_id, 'line': line,
-                    'ts': datetime.now().strftime('%H:%M:%S')
-                }, room=session_id)
+                socketio.emit('output', {'session_id': session_id, 'line': line, 'ts': datetime.now().strftime('%H:%M:%S')}, room=session_id)
     except Exception: pass
     finally:
         try:
             process.wait(); rc = process.returncode
         except Exception: rc = -1
         with sessions_lock:
-            if session_id in sessions:
-                sessions[session_id]["status"] = "stopped" if rc == 0 else f"exited({rc})"
-        socketio.emit('status', {
-            'session_id': session_id, 'status': 'stopped',
-            'return_code': rc, 'message': f'Tool kết thúc (code {rc})'
-        }, room=session_id)
+            if session_id in sessions: sessions[session_id]["status"] = "stopped" if rc == 0 else f"exited({rc})"
+        socketio.emit('status', {'session_id': session_id, 'status': 'stopped', 'return_code': rc, 'message': f'Tool kết thúc (code {rc})'}, room=session_id)
 
 
 def start_tool_process(session_id, tool_key):
     filepath, err = ensure_tool_file(tool_key)
     if err: return None, err
-    if not filepath or not os.path.exists(filepath):
-        return None, f"Không tìm thấy file: {filepath}"
+    if not filepath or not os.path.exists(filepath): return None, f"Không tìm thấy file: {filepath}"
     env = os.environ.copy()
-    env['PYTHONIOENCODING'] = 'utf-8'
-    env['PYTHONUNBUFFERED'] = '1'
-    env['TERM'] = 'xterm-256color'
+    env['PYTHONIOENCODING'] = 'utf-8'; env['PYTHONUNBUFFERED'] = '1'; env['TERM'] = 'xterm-256color'
     process = subprocess.Popen(
-        [sys.executable, '-u', filepath],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        cwd=TEMP_TOOLS_DIR, env=env, bufsize=1,
-        universal_newlines=True, encoding='utf-8', errors='replace',
+        [sys.executable, '-u', filepath], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        cwd=TEMP_TOOLS_DIR, env=env, bufsize=1, universal_newlines=True, encoding='utf-8', errors='replace'
     )
     return process, None
 
 
-# ============================================================================
-# ==================== FB CHUYỂN PAGE ========================================
-# ============================================================================
-@app.route('/api/fb_chuyenpage', methods=['POST'])
-def api_fb_chuyenpage():
-    data = request.json or {}
-    cookie = data.get('cookie', '').strip()
-    password = data.get('password', '').strip()
-    page_id = data.get('page_id', '').strip()
-    uid_nhan = data.get('uid_nhan', '').strip()
-
-    if not cookie or not page_id or not uid_nhan:
-        return jsonify({'ok': False, 'message': 'Thiếu Cookie / Page ID / UID nhận!'}), 400
-
-    fb_dtsg, jazoest = fb_get_dtsg(cookie)
-    if not fb_dtsg:
-        return jsonify({'ok': False, 'message': 'Cookie hết hạn!'}), 400
-
-    actor_m = re.search(r'c_user=(\d+)', cookie)
-    actor_id = actor_m.group(1) if actor_m else ""
-
-    headers = {
-        'cookie': cookie,
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'content-type': 'application/x-www-form-urlencoded',
-        'origin': 'https://www.facebook.com',
-        'referer': f'https://www.facebook.com/{page_id}/settings/'
-    }
-    payload = {
-        'fb_dtsg': fb_dtsg, 'jazoest': jazoest,
-        'variables': json.dumps({
-            "input": {
-                "client_mutation_id": "1", "actor_id": actor_id,
-                "profile_id": page_id, "target_user_id": uid_nhan,
-                "task_ids": [1, 2, 3, 4, 5], "password": password
-            }
-        }),
-        'doc_id': '5278783472212933'
-    }
-    try:
-        r = requests.post("https://www.facebook.com/api/graphql/",
-                          headers=headers, data=payload, timeout=20)
-        res = r.json()
-        if 'errors' in res:
-            err = res['errors'][0].get('message', 'Facebook từ chối')
-            return jsonify({'ok': False, 'message': f'Lỗi FB: {err}'}), 400
-        return jsonify({'ok': True, 'message': f'Đã gửi lời mời QTV Page {page_id} cho UID {uid_nhan}'})
-    except Exception as e:
-        return jsonify({'ok': False, 'message': f'Lỗi: {e}'}), 500
-
-
-# ============================================================================
-# ==================== ROUTES CHÍNH ==========================================
-# ============================================================================
 @app.route('/')
 def index():
     return render_template('index.html', tools=TOOL_INFO)
 
-
-@app.route('/health')
-def health():
-    return jsonify({"ok": True, "time": datetime.now().isoformat()})
-
-
 @app.route('/api/tools')
-def api_tools():
-    return jsonify(TOOL_INFO)
-
+def api_tools(): return jsonify(TOOL_INFO)
 
 @app.route('/api/sessions')
 def api_sessions():
     with sessions_lock:
-        result = []
-        for sid, s in sessions.items():
-            result.append({
-                "session_id": sid, "tool": s["tool"], "status": s["status"],
-                "started_at": s["started_at"], "output_count": len(s["output_lines"]),
-            })
-        return jsonify(result)
-
+        return jsonify([{"session_id": k, "tool": v["tool"], "status": v["status"], "started_at": v["started_at"], "output_count": len(v["output_lines"])} for k, v in sessions.items()])
 
 @app.route('/api/start/<tool_key>', methods=['POST'])
 def api_start(tool_key):
-    if tool_key not in EMBEDDED_TOOLS:
-        return jsonify({"ok": False, "error": "Tool không hợp lệ"}), 400
+    if tool_key not in EMBEDDED_TOOLS: return jsonify({"ok": False, "error": "Tool không hợp lệ"}), 400
     session_id = str(uuid.uuid4())[:8]
     process, err = start_tool_process(session_id, tool_key)
     if err: return jsonify({"ok": False, "error": err}), 500
     with sessions_lock:
-        sessions[session_id] = {
-            "tool": tool_key, "process": process, "output_lines": [],
-            "status": "running", "started_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        }
-    t = threading.Thread(target=read_process_output, args=(session_id, process), daemon=True)
-    t.start()
+        sessions[session_id] = {"tool": tool_key, "process": process, "output_lines": [], "status": "running", "started_at": datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+    threading.Thread(target=read_process_output, args=(session_id, process), daemon=True).start()
     return jsonify({"ok": True, "session_id": session_id})
-
 
 @app.route('/api/stop/<session_id>', methods=['POST'])
 def api_stop(session_id):
-    with sessions_lock:
-        s = sessions.get(session_id)
+    with sessions_lock: s = sessions.get(session_id)
     if not s: return jsonify({"ok": False, "error": "Session không tồn tại"}), 404
     try:
         proc = s["process"]
@@ -1592,31 +1456,23 @@ def api_stop(session_id):
             proc.terminate()
             try: proc.wait(timeout=3)
             except subprocess.TimeoutExpired: proc.kill()
-        with sessions_lock:
-            sessions[session_id]["status"] = "stopped"
-        socketio.emit('status', {'session_id': session_id, 'status': 'stopped',
-                                 'message': 'Đã dừng'}, room=session_id)
+        with sessions_lock: sessions[session_id]["status"] = "stopped"
+        socketio.emit('status', {'session_id': session_id, 'status': 'stopped', 'message': 'Đã dừng'}, room=session_id)
         return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
+    except Exception as e: return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route('/api/input/<session_id>', methods=['POST'])
 def api_input(session_id):
     data = request.get_json() or {}
     text = data.get("text", "")
-    with sessions_lock:
-        s = sessions.get(session_id)
+    with sessions_lock: s = sessions.get(session_id)
     if not s: return jsonify({"ok": False, "error": "Session không tồn tại"}), 404
     try:
         proc = s["process"]
-        if proc.poll() is not None:
-            return jsonify({"ok": False, "error": "Process đã kết thúc"}), 400
+        if proc.poll() is not None: return jsonify({"ok": False, "error": "Process đã kết thúc"}), 400
         proc.stdin.write(text + "\n"); proc.stdin.flush()
         return jsonify({"ok": True})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
+    except Exception as e: return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route('/api/clear/<session_id>', methods=['POST'])
 def api_clear(session_id):
@@ -1625,11 +1481,9 @@ def api_clear(session_id):
     socketio.emit('cleared', {'session_id': session_id}, room=session_id)
     return jsonify({"ok": True})
 
-
 @app.route('/api/save/<session_id>', methods=['POST'])
 def api_save(session_id):
-    with sessions_lock:
-        s = sessions.get(session_id)
+    with sessions_lock: s = sessions.get(session_id)
     if not s: return jsonify({"ok": False, "error": "Session không tồn tại"}), 404
     filename = f"{s['tool']}_{session_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
     filepath = os.path.join(SESSIONS_DIR, filename)
@@ -1639,9 +1493,7 @@ def api_save(session_id):
             f.write("=" * 60 + "\n")
             f.write("\n".join(s["output_lines"]))
         return jsonify({"ok": True, "filename": filename})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
+    except Exception as e: return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route('/api/test-proxy', methods=['POST'])
 def api_test_proxy():
@@ -1650,22 +1502,16 @@ def api_test_proxy():
     if not p: return jsonify({"ok": False, "error": "Proxy trống"})
     if "://" not in p: p = "http://" + p
     try:
-        r = requests.get("https://api.ipify.org?format=json",
-                         proxies={"http": p, "https": p}, timeout=15)
-        if r.status_code == 200:
-            return jsonify({"ok": True, "ip": r.json().get("ip", "")})
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)})
+        r = requests.get("https://api.ipify.org?format=json", proxies={"http": p, "https": p}, timeout=15)
+        if r.status_code == 200: return jsonify({"ok": True, "ip": r.json().get("ip", "")})
+    except Exception as e: return jsonify({"ok": False, "error": str(e)})
     return jsonify({"ok": False, "error": "Proxy die/timeout"})
-
 
 @socketio.on('join')
 def on_join(data):
     session_id = data.get('session_id')
     if session_id:
-        join_room(session_id)
-        emit('joined', {'session_id': session_id})
-
+        join_room(session_id); emit('joined', {'session_id': session_id})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
@@ -1674,6 +1520,6 @@ if __name__ == '__main__':
     print(f" 📁 Temp tools: {TEMP_TOOLS_DIR}")
     print(f" 🌐 Port: {port}")
     print(f" 📦 Tools: {list(EMBEDDED_TOOLS.keys())}")
-    print(f" 📘 FB: Reg Page (multi-thread 10 luồng), Chuyển Page")
+    print(f" 📘 FB: Reg Page (multi-thread), Chuyển Page")
     print("=" * 60)
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
