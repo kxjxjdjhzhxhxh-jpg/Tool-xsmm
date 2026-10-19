@@ -19,14 +19,14 @@
     </header>
 
     <nav class="tabs">
-        <!-- 3 Tab XSMM (Sinh ra tự động từ Python) -->
+        <!-- 3 Tab XSMM -->
         {% for key, info in tools.items() %}
-        <button class="tab-btn" data-tool="{{ key }}" style="--tab-color: {{ info.color }}">
+        <button class="tab-btn {% if loop.first %}active{% endif %}" data-tool="{{ key }}" style="--tab-color: {{ info.color }}">
             <span class="tab-dot"></span> {{ info.name }}
         </button>
         {% endfor %}
         
-        <!-- 2 Tab Bổ sung (Bắt buộc phải nằm ngoài vòng lặp) -->
+        <!-- 2 Tab Bổ sung -->
         <button class="tab-btn" data-tool="ig_login" style="--tab-color: #f59e0b">
             <span class="tab-dot"></span> IG Login (TK|MK|2FA)
         </button>
@@ -36,12 +36,10 @@
     </nav>
 
     <main class="content">
-        <!-- ========================================================= -->
         <!-- PANELS CHO 3 TOOL XSMM -->
-        <!-- ========================================================= -->
         {% for key, info in tools.items() %}
         {% set safe_key = key | replace('.', '_') %}
-        <section class="tool-panel" data-tool="{{ key }}" data-safe="{{ safe_key }}" style="--panel-color: {{ info.color }}">
+        <section class="tool-panel {% if loop.first %}active{% endif %}" data-tool="{{ key }}" data-safe="{{ safe_key }}" style="--panel-color: {{ info.color }}">
             <div class="config-form" id="form-{{ safe_key }}">
                 <div class="form-title">⚙️ CẤU HÌNH — {{ info.name }}</div>
                 <div class="form-row">
@@ -87,7 +85,6 @@
                 <div class="form-actions">
                     <button class="btn btn-start" data-tool="{{ key }}"><span class="btn-icon">▶</span> Chạy Tool</button>
                     <button class="btn btn-stop" data-tool="{{ key }}" disabled><span class="btn-icon">⏹</span> Dừng</button>
-                    <button class="btn btn-clear" data-tool="{{ key }}" disabled><span class="btn-icon">🧹</span> Xóa Log</button>
                 </div>
             </div>
             
@@ -97,10 +94,10 @@
                 <span class="output-count">0 dòng</span>
             </div>
 
-            <!-- BẢNG THỐNG KÊ NICK & XU -->
+            <!-- BẢNG THỐNG KÊ -->
             <div class="stats-table-wrap" style="background: #111; border: 1px solid #333; border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
                 <div style="padding: 10px 15px; background: #1a1a1a; border-bottom: 1px solid #333; font-weight: bold; color: #00d4ff;">
-                    📊 Thống Kê Xu Cày Được Của Từng Nick Instagram
+                    📊 Thống Kê Xu Cày Được
                 </div>
                 <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; color: white;">
                     <thead>
@@ -129,34 +126,24 @@
         </section>
         {% endfor %}
 
-        <!-- ========================================================= -->
-        <!-- TOOL 4: IG LOGIN -->
-        <!-- ========================================================= -->
+        <!-- TOOL IG LOGIN -->
         <section class="tool-panel" data-tool="ig_login" style="--panel-color: #f59e0b">
             <div class="config-form">
                 <div class="form-title">🔑 ĐĂNG NHẬP IG BẰNG TK|MK|2FA</div>
                 <div class="form-row">
-                    <label>📋 Danh sách TK <small>(mỗi dòng: <code>user|pass|2fa|proxy</code> - 2fa và proxy có thể bỏ trống)</small>:</label>
-                    <textarea class="cfg-input" id="ig_login_tasks" rows="6" placeholder="username|password|2FA|proxy&#10;user1|pass1||"></textarea>
+                    <label>📋 Danh sách TK <small>(user|pass|2fa|proxy)</small>:</label>
+                    <textarea class="cfg-input" id="ig_login_tasks" rows="6" placeholder="username|password|2FA|proxy"></textarea>
                 </div>
                 <div class="form-row form-row-inline">
                     <label>🔀 Số luồng:</label>
                     <input type="number" class="cfg-input" id="ig_login_threads" value="5" style="width:70px">
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-start" id="btn_ig_login"><span class="btn-icon">▶</span> Bắt đầu Login</button>
+                    <button class="btn btn-start" id="btn_ig_login">▶ Bắt đầu Login</button>
                 </div>
             </div>
-            
-            <div class="session-info" style="visibility:hidden;">
-                <span class="badge status-badge running">● RUNNING</span>
-            </div>
-
             <div class="terminal-wrap">
-                <div class="terminal-header">
-                    <div class="dots"><span></span><span></span><span></span></div>
-                    <div class="term-title">IG Login — Kết quả</div>
-                </div>
+                <div class="terminal-header"><div class="dots"><span></span><span></span><span></span></div><div class="term-title">IG Login — Kết quả</div></div>
                 <div class="fb-table-wrap" style="max-height: 400px;">
                     <table class="fb-table">
                         <thead><tr><th>STT</th><th>Tài Khoản</th><th>Trạng Thái</th><th>Cookie</th></tr></thead>
@@ -166,9 +153,7 @@
             </div>
         </section>
 
-        <!-- ========================================================= -->
-        <!-- TOOL 5: FB REG PAGE -->
-        <!-- ========================================================= -->
+        <!-- TOOL FB REG PAGE -->
         <section class="tool-panel" data-tool="fb_regpage" style="--panel-color: #1877f2">
             <div class="config-form">
                 <div class="form-title">📘 FB REG PAGE + UP AVT + CHUYỂN PAGE</div>
@@ -178,18 +163,18 @@
                 </div>
                 <div class="form-row">
                     <label>📝 Danh sách Tên Page <small>(mỗi dòng 1 tên)</small>:</label>
-                    <textarea class="cfg-input" id="fb_reg_names" rows="4" placeholder="Michelle Howard&#10;Carol Jones"></textarea>
+                    <textarea class="cfg-input" id="fb_reg_names" rows="4" placeholder="Michelle Howard"></textarea>
                 </div>
                 <div class="form-row">
-                    <label>🖼️ Danh sách URL Avatar <small>(có thể bỏ trống)</small>:</label>
+                    <label>🖼️ Danh sách URL Avatar:</label>
                     <textarea class="cfg-input" id="fb_reg_avatars" rows="2" placeholder="https://..."></textarea>
                 </div>
                 <div class="form-row">
-                    <label>🖼️ Danh sách URL Ảnh Bìa <small>(có thể bỏ trống)</small>:</label>
+                    <label>🖼️ Danh sách URL Ảnh Bìa:</label>
                     <textarea class="cfg-input" id="fb_reg_covers" rows="2" placeholder="https://..."></textarea>
                 </div>
                 <div class="form-row">
-                    <label>👤 UID Nick Nhận Page <small>(để trống nếu không chuyển)</small>:</label>
+                    <label>👤 UID Nick Nhận Page:</label>
                     <input type="text" class="cfg-input" id="fb_reg_uid" placeholder="1000xxxx">
                 </div>
                 <div class="form-row form-row-inline">
@@ -201,15 +186,11 @@
                     <div class="fb-stat"><span class="fb-stat-label">LỖI</span><span class="fb-stat-val red" id="fb_stat_err">0</span></div>
                 </div>
                 <div class="form-actions">
-                    <button class="btn btn-start" id="btn_fb_reg"><span class="btn-icon">▶</span> Chạy Tool</button>
+                    <button class="btn btn-start" id="btn_fb_reg">▶ Chạy Tool</button>
                 </div>
             </div>
-            
             <div class="terminal-wrap">
-                <div class="terminal-header">
-                    <div class="dots"><span></span><span></span><span></span></div>
-                    <div class="term-title">Bảng tiến trình FB Reg Page</div>
-                </div>
+                <div class="terminal-header"><div class="dots"><span></span><span></span><span></span></div><div class="term-title">Bảng tiến trình FB Reg Page</div></div>
                 <div class="fb-table-wrap">
                     <table class="fb-table">
                         <thead><tr><th>D</th><th>UID</th><th>Page ID</th><th>Tên Page</th><th>Trạng thái</th></tr></thead>
@@ -219,13 +200,7 @@
             </div>
         </section>
     </main>
-
-    <footer class="footer">
-        <span>© TA TOOL — Donate MoMo: 0373607456</span>
-        <span id="sessions-count">0 sessions</span>
-    </footer>
 </div>
-
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
