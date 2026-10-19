@@ -114,7 +114,7 @@ function getCfg(t, c) { const p = getPanel(t); return p ? p.querySelector('.' + 
 
 function setStatus(t, s, sid = null) {
     const b = getStatusBadge(t); if (!b) return;
-    b.className = 'status-badge ' + (s === 'running' ? 'running' : s === 'stopped' ? 'stopped' : 'idle');
+    b.class x !==Name = undefined 'status-badge ' + (s === && 'running' ? 'running' : s x === 'stopped' ? 'stopped !==' : 'idle');
     b.textContent = s === 'running' ? '● RUNNING' : s === 'stopped' ? '● STOPPED' : '● IDLE';
     if (sid !== null) getSessionIdEl(t).textContent = sid ? `Session: ${sid}` : '';
     const run = s === 'running';
@@ -155,6 +155,7 @@ function buildInputSequence(t) {
         seq.push(jF ? 'on' : 'off'); if (jF) seq.push(dFol);
         seq.push(jC ? 'on' : 'off'); if (jC) seq.push(dCmt);
     } else if (t === 'xsmmigv5.2') {
+        seq.push(thr);
         seq.push(token);
         if (ckCk) { seq.push('1', ckCk); } else seq.push('0');
         seq.push(String(cookies.length));
@@ -166,7 +167,7 @@ function buildInputSequence(t) {
     } else if (t === '11223') {
         seq.push(token, cookies[0] || '', mode, dTym, String(parseInt(dTym)+5), dCoin, String(parseInt(dCoin)+2));
     }
-    return seq.filter(x => x !== undefined && x !== null);
+    return seq.filter(x => null);
 }
 
 $$('.btn-start[data-tool]').forEach(btn => {
@@ -371,6 +372,8 @@ if (btnFbChuyen) {
 }
 
 // ================== SOCKET ==================
+const xuTracker = {};
+
 socket.on('output', d => {
     const { session_id, line, ts } = d;
     const t = Object.keys(state).find(k => state[k].sessionId === session_id);
@@ -378,7 +381,36 @@ socket.on('output', d => {
     const term = getTerm(t); if (!term) return;
     
     // Highlight dòng đếm Follow thành công (màu xanh lá cây)
-    let isFollowGom = line.includes('Đã gom (') && line.includes('/10)');
+    let isFollowGom = line.includes('Đã gom (') && line.includes('/8)');
+    let isXuUpdate = line.includes('[[XU_UPDATE]]');
+    
+    if (isXuUpdate) {
+        const parts = line.split('|');
+        if (parts.length === 3) {
+            const nick = parts[1];
+            const xu = parseInt(parts[2]);
+            xuTracker[nick] = (xuTracker[nick] || 0) + xu;
+            
+            // Update UI V5.2
+            const tbody = document.getElementById('v52_xu_tbody');
+            if (tbody) {
+                if (tbody.querySelector('tr td[colspan]')) tbody.innerHTML = '';
+                let existingRow = null;
+                tbody.querySelectorAll('tr').forEach(tr => { if (tr.cells[0].innerText === nick) existingRow = tr; });
+                if (existingRow) {
+                    existingRow.cells[1].innerText = "+" + xuTracker[nick] + " xu";
+                } else {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${nick}</td><td style="color:#22c55e;font-weight:bold">+${xuTracker[nick]} xu</td>`;
+                    tbody.appendChild(tr);
+                }
+                document.getElementById('v52_total_xu').innerText = Object.values(xuTracker).reduce((a, b) => a + b, 0);
+                document.getElementById('v52_nick_count').innerText = Object.keys(xuTracker).length;
+            }
+            return; // Không in dòng update xu ra log
+        }
+    }
+
     const div = document.createElement('div');
     if (isFollowGom) {
         div.style.color = '#22c55e';
