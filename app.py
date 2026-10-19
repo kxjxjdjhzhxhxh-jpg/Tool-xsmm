@@ -33,7 +33,7 @@ FB_REG_STATE = {"running": False, "total_success": 0, "total_fail": 0}
 FB_REG_LOCK = threading.Lock()
 
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py (CHỈ COOKIE) ===================
+# ==================== TOOL 2: xsmmigv5.2.py (FIX THỨ TỰ NHẬP) ==============
 # ============================================================================
 TOOL_CODE_XSMMIGV52 = r'''import os, sys, time, json, re, random
 from datetime import datetime
@@ -176,26 +176,38 @@ def run_account(acc, listnv, config_delays, xsmm_token, dl, doi):
         if max_job >= doi: max_job = 0
 
 def main():
+    # 1. Đọc số luồng
     sys.stdout.write("Số luồng: "); sys.stdout.flush()
     try: threads = int(input().strip())
     except: threads = 10
+    # 2. Đọc Token XSMM
     sys.stdout.write("Token XSMM: "); sys.stdout.flush()
     token = input().strip()
+    # 3. Đọc số nick
     sys.stdout.write("Số nick: "); sys.stdout.flush()
     try: sl = int(input().strip())
     except: sl = 1
+    
+    # 4. Đọc danh sách cookie
     mang = []
     for i in range(sl):
         print(f"Nhập Cookie ({i+1}): "); sys.stdout.flush()
         c = input().strip()
-        if c: mang.append({"cookie": c, "proxy": ""})
+        proxy = ""
+        if "|" in c:
+            parts = c.split("|", 1)
+            c = parts[0].strip()
+            proxy = parts[1].strip()
+        if c: mang.append({"cookie": c, "proxy": proxy})
     
+    # 5. Đọc Jobs
     listnv = []
     for job in ['instagram_like', 'instagram_follow', 'instagram_comment']:
         sys.stdout.write(f"{job} (on/off): "); sys.stdout.flush()
         if input().strip().lower() == 'on': listnv.append(job)
     if not listnv: sys.exit()
     
+    # Chạy
     with ThreadPoolExecutor(max_workers=threads) as ex:
         for ad in mang: ex.submit(run_account, ad, listnv, {'tym':10,'follow':15,'comment':20}, token, 150, 99999)
 
