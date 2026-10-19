@@ -11,27 +11,59 @@
     <header class="header">
         <div class="logo">
             <span class="logo-icon">🚀</span>
-            <div><h1>XSMM IG V5.2 & FB TOOL</h1><p class="subtitle">Chạy Jobs IG & Reg Page FB — TA Tool</p></div>
+            <div>
+                <h1>TA TOOL WEB MANAGER</h1>
+                <p class="subtitle">3 Tool IG + IG Login + FB Reg Page — TA Tool — MoMo: 0373607456</p>
+            </div>
         </div>
         <div class="header-info">
             <div class="clock" id="clock">--:--:--</div>
-            <div class="color-picker-wrap"><label for="theme-color"><span class="picker-icon">🎨</span></label><input type="color" id="theme-color" value="#ec4899"></div>
+            <div class="color-picker-wrap">
+                <label for="theme-color" title="Đổi màu chủ đạo">
+                    <span class="picker-icon">🎨</span>
+                </label>
+                <input type="color" id="theme-color" value="#ec4899" title="Đổi màu chủ đạo">
+            </div>
         </div>
     </header>
 
     <nav class="tabs">
-        <button class="tab-btn active" data-tool="xsmmigv5.2" style="--tab-color: #ff6b9d"><span class="tab-dot"></span>XSMM IG V5.2</button>
-        <button class="tab-btn" data-tool="fb_regpage" style="--tab-color: #1877f2"><span class="tab-dot"></span>FB Reg Page</button>
+        {% for key, info in tools.items() %}
+        <button class="tab-btn" data-tool="{{ key }}" style="--tab-color: {{ info.color }}">
+            <span class="tab-dot"></span>
+            {{ info.name }}
+        </button>
+        {% endfor %}
+        <button class="tab-btn" data-tool="ig_login" style="--tab-color: #f59e0b">
+            <span class="tab-dot"></span>
+            IG Login (TK|MK|2FA)
+        </button>
+        <button class="tab-btn" data-tool="fb_regpage" style="--tab-color: #1877f2">
+            <span class="tab-dot"></span>
+            FB Reg Page (Auto)
+        </button>
     </nav>
 
     <main class="content">
-        <!-- TOOL IG -->
-        <section class="tool-panel active" data-tool="xsmmigv5.2" data-safe="xsmmigv5_2" style="--panel-color: #ff6b9d">
+        <!-- 3 TOOL IG CƠ BẢN -->
+        {% for key, info in tools.items() %}
+        {% set safe_key = key | replace('.', '_') %}
+        <section class="tool-panel" data-tool="{{ key }}" data-safe="{{ safe_key }}" style="--panel-color: {{ info.color }}">
             <canvas class="fx-canvas-form"></canvas>
-            <div class="config-form" id="form-xsmmigv5_2">
-                <div class="form-title">⚙️ CẤU HÌNH — XSMM IG V5.2</div>
+            <div class="config-form" id="form-{{ safe_key }}">
+                <div class="form-title">⚙️ CẤU HÌNH — {{ info.name }}</div>
                 
-                <div class="form-row"><label>🔑 Access Token XSMM:</label><input type="text" class="cfg-input cfg-token" placeholder="Dán token XSMM" autocomplete="off"></div>
+                <div class="form-row">
+                    <label>🔑 Access Token XSMM:</label>
+                    <input type="text" class="cfg-input cfg-token" placeholder="Dán token XSMM" autocomplete="off">
+                </div>
+                
+                {% if key == 'xsmmigv5.2' %}
+                <div class="form-row">
+                    <label>🍪 Cookie Check Jobs (tùy chọn):</label>
+                    <textarea class="cfg-input cfg-cookiecheck" rows="2" placeholder="Để trống = dùng cookie của từng nick"></textarea>
+                </div>
+                {% endif %}
                 
                 <div class="form-row">
                     <label>📋 Danh sách Cookie IG <small>(mỗi dòng 1 nick: <code>cookie</code> hoặc <code>cookie|proxy</code>)</small>:</label>
@@ -56,6 +88,18 @@
                     </div>
                 </div>
                 
+                {% if key == 'xsmmv3.2' %}
+                <div class="form-row form-row-inline">
+                    <label>🔀 Cấu hình luồng:</label>
+                    <div class="inline-inputs">
+                        <span>🔢 Số luồng <input type="number" class="cfg-input cfg-threads" value="10" min="1" max="50" style="width:70px"></span>
+                        <span>Jobs đổi nick <input type="number" class="cfg-input cfg-rotate" value="99999" min="1" style="width:90px"></span>
+                        <span>Chờ khi hết <input type="number" class="cfg-input cfg-wait" value="150" min="10" style="width:80px"></span>
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if key == 'xsmmigv5.2' %}
                 <div class="form-row form-row-inline">
                     <label>🔀 Cấu hình:</label>
                     <div class="inline-inputs">
@@ -63,62 +107,132 @@
                         <span>Jobs đổi nick <input type="number" class="cfg-input cfg-rotate" value="99999" min="1" style="width:90px"></span>
                     </div>
                 </div>
+                {% endif %}
+                
+                {% if key == '11223' %}
+                <div class="form-row form-row-inline">
+                    <label>🎬 Chế độ:</label>
+                    <div class="inline-inputs">
+                        <select class="cfg-input cfg-mode" style="width:220px">
+                            <option value="1">1. Like</option>
+                            <option value="2">2. Follow (đủ 8)</option>
+                            <option value="3">3. Comment</option>
+                        </select>
+                        <span>Delay coin <input type="number" class="cfg-input cfg-delaycoin" value="3" min="1" style="width:70px"></span>
+                    </div>
+                </div>
+                {% endif %}
                 
                 <div class="form-actions">
-                    <button class="btn btn-start" data-tool="xsmmigv5.2"><span class="btn-icon">▶</span> Chạy Tool</button>
-                    <button class="btn btn-stop" data-tool="xsmmigv5.2" disabled><span class="btn-icon">⏹</span> Dừng</button>
-                    <button class="btn btn-clear" data-tool="xsmmigv5.2" disabled><span class="btn-icon">🧹</span> Reset data</button>
-                    <button class="btn btn-save" data-tool="xsmmigv5.2" disabled><span class="btn-icon">💾</span> Lưu Log</button>
+                    <button class="btn btn-start" data-tool="{{ key }}"><span class="btn-icon">▶</span> Chạy Tool</button>
+                    <button class="btn btn-stop" data-tool="{{ key }}" disabled><span class="btn-icon">⏹</span> Dừng</button>
+                    <button class="btn btn-clear" data-tool="{{ key }}" disabled><span class="btn-icon">🧹</span> Xóa Log</button>
+                    <button class="btn btn-save" data-tool="{{ key }}" disabled><span class="btn-icon">💾</span> Lưu Log</button>
                 </div>
             </div>
             
-            <div class="fb-stats">
-                <div class="fb-stat"><span class="fb-stat-label">TỔNG XU</span><span class="fb-stat-val green" id="v52_total_xu">0</span></div>
-                <div class="fb-stat"><span class="fb-stat-label">SỐ NICK ĐÃ NHẬN</span><span class="fb-stat-val" id="v52_nick_count">0</span></div>
-            </div>
-            <div class="fb-table-wrap" style="max-height: 200px; margin-bottom: 10px; border-radius: 10px;">
-                <table class="fb-table"><thead><tr><th>Tên Nick IG</th><th>Xu đã nhận</th></tr></thead><tbody id="v52_xu_tbody"><tr><td colspan="2" style="text-align:center;color:#888;padding:10px">Chưa có dữ liệu...</td></tr></tbody></table>
-            </div>
-
-            <div class="session-info" data-tool="xsmmigv5.2">
+            <div class="session-info" data-tool="{{ key }}">
                 <span class="badge status-badge idle">● IDLE</span>
                 <span class="session-id"></span>
                 <span class="output-count">0 dòng</span>
             </div>
             
             <div class="terminal-wrap">
-                <div class="terminal-header"><div class="dots"><span></span><span></span><span></span></div><div class="term-title">xsmmigv5.2.py — output</div></div>
-                <div class="terminal" id="term-xsmmigv5_2"></div>
+                <div class="terminal-header">
+                    <div class="dots"><span></span><span></span><span></span></div>
+                    <div class="term-title">{{ key }}.py — output</div>
+                </div>
+                <div class="terminal" id="term-{{ safe_key }}"></div>
+                <canvas class="fx-canvas-term"></canvas>
+            </div>
+            
+            <div class="input-bar">
+                <input type="text" class="stdin-input" placeholder="Nhập input thủ công (nếu cần). Enter để gửi" data-tool="{{ key }}" disabled>
+                <button class="btn btn-send" data-tool="{{ key }}" disabled>Gửi ⏎</button>
+            </div>
+        </section>
+        {% endfor %}
+
+        <!-- TOOL 4: IG LOGIN -->
+        <section class="tool-panel" data-tool="ig_login" style="--panel-color: #f59e0b">
+            <canvas class="fx-canvas-form"></canvas>
+            <div class="config-form">
+                <div class="form-title">🔑 ĐĂNG NHẬP IG BẰNG TK|MK|2FA</div>
+                <div class="form-row">
+                    <label>📋 Danh sách TK <small>(mỗi dòng: <code>user|pass|2fa|proxy</code> - 2fa và proxy có thể bỏ trống)</small>:</label>
+                    <textarea class="cfg-input" id="ig_login_tasks" rows="6" placeholder="username|password|2FA|proxy&#10;user1|pass1||"></textarea>
+                </div>
+                <div class="form-row form-row-inline">
+                    <label>🔀 Số luồng:</label>
+                    <input type="number" class="cfg-input" id="ig_login_threads" value="5" style="width:70px">
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-start" id="btn_ig_login"><span class="btn-icon">▶</span> Bắt đầu Login</button>
+                </div>
+            </div>
+            
+            <div class="session-info" style="visibility:hidden;">
+                <span class="badge status-badge running">● RUNNING</span>
+            </div>
+
+            <div class="terminal-wrap">
+                <div class="terminal-header">
+                    <div class="dots"><span></span><span></span><span></span></div>
+                    <div class="term-title">IG Login — Kết quả</div>
+                </div>
+                <div class="fb-table-wrap" style="max-height: 400px;">
+                    <table class="fb-table">
+                        <thead><tr><th>STT</th><th>Tài Khoản</th><th>Trạng Thái</th><th>Cookie</th></tr></thead>
+                        <tbody id="ig_login_tbody"><tr><td colspan="4" style="text-align:center;color:#888;padding:20px">Chưa có dữ liệu...</td></tr></tbody>
+                    </table>
+                </div>
                 <canvas class="fx-canvas-term"></canvas>
             </div>
         </section>
 
-        <!-- FB REG PAGE -->
+        <!-- TOOL 5: FB REG PAGE NÂNG CAO -->
         <section class="tool-panel" data-tool="fb_regpage" style="--panel-color: #1877f2">
             <canvas class="fx-canvas-form"></canvas>
             <div class="config-form">
                 <div class="form-title">📘 FB REG PAGE + UP AVT + CHUYỂN PAGE</div>
-                <div class="form-row"><label>📋 Danh sách Nick <small>(cookie|proxy)</small>:</label><textarea class="cfg-input" id="fb_reg_tasks" rows="4" placeholder="c_user=1000xxx; xs=abc...|27.64.254.37:8080:user:pass"></textarea></div>
-                <div class="form-row"><label>📝 Danh sách Tên Page <small>(mỗi dòng 1 tên)</small>:</label><textarea class="cfg-input" id="fb_reg_names" rows="4" placeholder="Michelle Howard&#10;Carol Jones"></textarea></div>
-                <div class="form-row"><label>🖼️ Danh sách URL Avatar <small>(có thể bỏ trống)</small>:</label><textarea class="cfg-input" id="fb_reg_avatars" rows="2" placeholder="https://..."></textarea></div>
-                <div class="form-row"><label>🖼️ Danh sách URL Ảnh Bìa <small>(có thể bỏ trống)</small>:</label><textarea class="cfg-input" id="fb_reg_covers" rows="2" placeholder="https://..."></textarea></div>
-                <div class="form-row form-row-inline">
-                    <label>👤 UID Nick Nhận:</label><input type="text" class="cfg-input" id="fb_reg_uid" placeholder="1000xxxx" style="width:180px">
-                    <label style="margin-left:10px">🔒 Pass nick chuyển:</label><input type="password" class="cfg-input" id="fb_reg_pwd" placeholder="Mật khẩu FB" style="width:180px">
+                <div class="form-row">
+                    <label>📋 Danh sách Nick <small>(cookie|proxy)</small>:</label>
+                    <textarea class="cfg-input" id="fb_reg_tasks" rows="4" placeholder="c_user=1000xxx; xs=abc...|27.64.254.37:8080:user:pass"></textarea>
                 </div>
-                <div class="form-row form-row-inline"><label>🔀 Số luồng:</label><input type="number" class="cfg-input" id="fb_reg_threads" value="10" style="width:70px"></div>
+                <div class="form-row">
+                    <label>📝 Danh sách Tên Page <small>(mỗi dòng 1 tên)</small>:</label>
+                    <textarea class="cfg-input" id="fb_reg_names" rows="4" placeholder="Michelle Howard&#10;Carol Jones"></textarea>
+                </div>
+                <div class="form-row">
+                    <label>🖼️ Danh sách URL Avatar <small>(có thể bỏ trống)</small>:</label>
+                    <textarea class="cfg-input" id="fb_reg_avatars" rows="2" placeholder="https://..."></textarea>
+                </div>
+                <div class="form-row">
+                    <label>🖼️ Danh sách URL Ảnh Bìa <small>(có thể bỏ trống)</small>:</label>
+                    <textarea class="cfg-input" id="fb_reg_covers" rows="2" placeholder="https://..."></textarea>
+                </div>
+                <div class="form-row">
+                    <label>👤 UID Nick Nhận Page <small>(để trống nếu không chuyển)</small>:</label>
+                    <input type="text" class="cfg-input" id="fb_reg_uid" placeholder="1000xxxx">
+                </div>
+                <div class="form-row form-row-inline">
+                    <label>🔀 Số luồng:</label>
+                    <input type="number" class="cfg-input" id="fb_reg_threads" value="10" style="width:70px">
+                </div>
                 <div class="fb-stats">
                     <div class="fb-stat"><span class="fb-stat-label">OK</span><span class="fb-stat-val green" id="fb_stat_ok">0</span></div>
                     <div class="fb-stat"><span class="fb-stat-label">LỖI</span><span class="fb-stat-val red" id="fb_stat_err">0</span></div>
                 </div>
                 <div class="form-actions">
                     <button class="btn btn-start" id="btn_fb_reg"><span class="btn-icon">▶</span> Chạy Tool</button>
-                    <button class="btn btn-clear" id="btn_fb_clear"><span class="btn-icon">🧹</span> Reset</button>
                 </div>
             </div>
             
             <div class="terminal-wrap">
-                <div class="terminal-header"><div class="dots"><span></span><span></span><span></span></div><div class="term-title">Bảng tiến trình FB Reg Page</div></div>
+                <div class="terminal-header">
+                    <div class="dots"><span></span><span></span><span></span></div>
+                    <div class="term-title">Bảng tiến trình FB Reg Page</div>
+                </div>
                 <div class="fb-table-wrap">
                     <table class="fb-table">
                         <thead><tr><th>D</th><th>UID</th><th>Page ID</th><th>Tên Page</th><th>Trạng thái</th></tr></thead>
@@ -130,8 +244,12 @@
         </section>
     </main>
 
-    <footer class="footer"><span>© TA TOOL — Donate MoMo: 0373607456</span><span id="sessions-count">0 sessions</span></footer>
+    <footer class="footer">
+        <span>© TA TOOL — Donate MoMo: 0373607456</span>
+        <span id="sessions-count">0 sessions</span>
+    </footer>
 </div>
+
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 <script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
