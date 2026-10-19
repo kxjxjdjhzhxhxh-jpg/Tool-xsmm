@@ -31,18 +31,13 @@ sessions = {}
 sessions_lock = threading.Lock()
 
 FB_REG_STATE = {
-    "running": False,
-    "results": [],
-    "threads": 0,
-    "running_threads": 0,
-    "start_time": 0,
-    "total_success": 0,
-    "total_fail": 0,
+    "running": False, "results": [], "threads": 0, "running_threads": 0,
+    "start_time": 0, "total_success": 0, "total_fail": 0,
 }
 FB_REG_LOCK = threading.Lock()
 
 # ============================================================================
-# ==================== TOOL 1: xsmmv3.2.py (WARMUP) =========================
+# ==================== TOOL 1: xsmmv3.2.py ==================================
 # ============================================================================
 TOOL_CODE_XSMMV32 = r'''import os
 import sys
@@ -131,43 +126,6 @@ def check_cookie_ig(cookie, proxy=None):
                'user-agent': useragent, 'sec-ch-ua': sec_ch_ua_120}
     try: return c_requests.get(url, headers=headers, proxies=format_proxy(proxy), impersonate="chrome120", timeout=30).text
     except: return "{}"
-
-def ig_warmup(session, cookie, proxy, tenfb):
-    thread_safe_print(f"{cyan}[*] [{tenfb}] Warmup...{reset}")
-    try:
-        session.get("https://www.instagram.com/", impersonate="chrome120", timeout=15)
-        time.sleep(random.uniform(3, 6))
-        targets = ["instagram", "cristiano", "natgeo", "therock", "leomessi"]
-        for t in random.sample(targets, random.randint(1, 2)):
-            try:
-                r = session.get(f"https://www.instagram.com/{t}/", impersonate="chrome120", timeout=10)
-                m_id = re.search(r'"profile_id":"(\d+)"', r.text) or re.search(r'profilePage_(\d+)', r.text)
-                if not m_id: continue
-                tid = m_id.group(1)
-                actor_m = re.search(r'ds_user_id=(\d+)', cookie)
-                actor = actor_m.group(1) if actor_m else "0"
-                h = get_ig_headers(cookie, "", f"https://www.instagram.com/{t}/")
-                data = {
-                    "av": actor, "__d": "www", "__user": "0", "__a": "1", "__req": "s",
-                    "__hs": "20702.HYP:instagram_web_pkg.2.1...0", "dpr": "1", "__ccg": "EXCELLENT",
-                    "__rev": "1046917461", "__comet_req": "7", "lsd": "Jfq8VQNmkkkJufHSbEE9bf",
-                    "fb_api_caller_class": "RelayModern",
-                    "fb_api_req_friendly_name": "usePolarisFollowMutation",
-                    "server_timestamps": "true", "doc_id": "26508036048874888",
-                    "variables": json.dumps({"target_user_id": tid, "container_module": "profile",
-                        "nav_chain": "PolarisFeedRoot:feedPage:5:topnav-link,PolarisProfileRoot:profilePage:6:unexpected"})
-                }
-                session.post("https://www.instagram.com/api/graphql", data=data, impersonate="chrome120", timeout=15)
-                thread_safe_print(f"{green}[+] [{tenfb}] Follow @{t}{reset}")
-                time.sleep(random.uniform(4, 8))
-            except: pass
-        session.get("https://www.instagram.com/explore/", impersonate="chrome120", timeout=15)
-        time.sleep(random.uniform(5, 10))
-        thread_safe_print(f"{green}[+] [{tenfb}] Warmup done{reset}")
-        return True
-    except Exception as e:
-        thread_safe_print(f"{yellow}[!] [{tenfb}] Warmup fail: {e}{reset}")
-        return False
 
 def follow(target_id, cookie, csrftoken, profile_url="", proxy=None):
     if not target_id: return '{"status": "error"}'
@@ -288,12 +246,12 @@ def gui_nhan_xu(job_type, task_list, uid, cookie_check, xsmm, tenfb):
     ck = xsmm.complete_tasks(job_type, task_list, uid=uid, cookie_check=cookie_check)
     now = datetime.now().strftime("%H:%M:%S")
     if isinstance(ck, dict):
+        pts = ck.get('points', 0)
         if 'message' in ck:
-            thread_safe_print(f"[{now}] [{tenfb}] {ck['message']} (+{ck.get('points', 0)} xu)")
-        elif ck.get("is_timeout"):
-            thread_safe_print(f"[{now}] [{tenfb}] {ck['message']}")
-        elif 'error' in ck:
-            thread_safe_print(f"[{now}] [{tenfb}] LỖI: {ck['error']}")
+            thread_safe_print(f"[{now}] [{tenfb}] {ck['message']} (+{pts} xu)")
+            if pts > 0: thread_safe_print(f"[[XU_UPDATE]]|{tenfb}|{pts}")
+        elif ck.get("is_timeout"): thread_safe_print(f"[{now}] [{tenfb}] {ck['message']}")
+        elif 'error' in ck: thread_safe_print(f"[{now}] [{tenfb}] LỖI: {ck['error']}")
         if ck.get('countdown', 0) > 0: time.sleep(ck['countdown'])
 
 def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
@@ -313,18 +271,6 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
         return
     px = f" | Proxy: {proxy}" if proxy else ""
     thread_safe_print(f"{green}[+] NICK [{tenfb} | {idfb}{px}]{reset}")
-
-    warmup_sess = c_requests.Session()
-    wp = format_proxy(proxy)
-    if wp: warmup_sess.proxies = wp
-    for item in cookie.split(';'):
-        if '=' in item:
-            try:
-                k, v = item.strip().split('=', 1); warmup_sess.cookies.set(k, v, domain='.instagram.com')
-            except: pass
-    ig_warmup(warmup_sess, cookie, proxy, tenfb)
-    time.sleep(random.uniform(8, 15))
-
     try:
         acc_list = xsmm_thread.get_accounts(account_type="instagram", search=idfb)
         exists = False
@@ -332,10 +278,8 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
             for acc in acc_list["accounts"]:
                 if acc and (str(acc.get("account_id")) == str(idfb) or str(acc.get("name", "")).lower() == str(tenfb).lower()):
                     exists = True; break
-        if not exists:
-            xsmm_thread.add_account("instagram", f"https://www.instagram.com/{tenfb}")
+        if not exists: xsmm_thread.add_account("instagram", f"https://www.instagram.com/{tenfb}")
     except: pass
-
     max_job = 0; cache = []
     while True:
         job = random.choice(listnv)
@@ -344,8 +288,7 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
             if isinstance(lv, list) and len(lv) > 0:
                 solo = 0
                 for nv in lv:
-                    csf_m = re.search(r'csrftoken=([^;]+)', cookie)
-                    csf = csf_m.group(1) if csf_m else ""
+                    csf_m = re.search(r'csrftoken=([^;]+)', cookie); csf = csf_m.group(1) if csf_m else ""
                     thread_safe_print(f"{yellow}[Tym] {nv.get('target_url', '')}{reset}")
                     chay = tym(nv.get('target_id', ''), cookie, csf, nv.get('target_url', ''), proxy=proxy)
                     max_job += 1
@@ -368,8 +311,7 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
                 for nv in lv:
                     tid = nv.get('target_id', ''); lj = nv.get('target_url', '')
                     if not tid or not str(tid).isdigit(): continue
-                    csf_m = re.search(r'csrftoken=([^;]+)', cookie)
-                    csf = csf_m.group(1) if csf_m else ""
+                    csf_m = re.search(r'csrftoken=([^;]+)', cookie); csf = csf_m.group(1) if csf_m else ""
                     thread_safe_print(f"{yellow}[Follow] {tid}{reset}")
                     chay = follow(tid, cookie, csf, lj, proxy=proxy)
                     max_job += 1
@@ -378,8 +320,8 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
                         if 'data' not in g and g.get('status') not in ('ok', 'success'): solo += 1
                         else:
                             cache.append(nv.get('id')); solo = 0
-                            thread_safe_print(f"{green}[+] Follow OK ({len(cache)}/10){reset}")
-                            if len(cache) == 10:
+                            thread_safe_print(f"{green}[+] Follow OK ({len(cache)}/8){reset}")
+                            if len(cache) == 8:
                                 gui_nhan_xu("instagram_follow", cache, idfb, cookie, xsmm_thread, tenfb)
                                 cache = []; break
                     except: solo += 1
@@ -393,8 +335,7 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
                 for nv in lv:
                     idm = nv.get('target_id', ''); nd = nv.get('comment', '❤️❤️❤️'); lj = nv.get('target_url', '')
                     if not idm: continue
-                    csf_m = re.search(r'csrftoken=([^;]+)', cookie)
-                    csf = csf_m.group(1) if csf_m else ""
+                    csf_m = re.search(r'csrftoken=([^;]+)', cookie); csf = csf_m.group(1) if csf_m else ""
                     thread_safe_print(f"{yellow}[CMT] {lj}{reset}")
                     chay = cmt(idm, nd, cookie, csf, lj, proxy=proxy)
                     max_job += 1
@@ -415,7 +356,7 @@ def run_single_account(acc_data, listnv, config_delays, xsmm_token, dl, doi):
             time.sleep(dl); max_job = 0
 
 def main():
-    print(f"{cyan}===== XSMM TOOL V3.2 (WARMUP) ====={reset}")
+    print(f"{cyan}===== XSMM TOOL V3.2 ====={reset}")
     sys.stdout.write("Số luồng (1-50): "); sys.stdout.flush()
     try:
         max_threads = int(input().strip())
@@ -496,7 +437,7 @@ if __name__ == "__main__":
 '''
 
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py (WARMUP + ĐẾM FL) ==============
+# ==================== TOOL 2: xsmmigv5.2.py (ĐA LUỒNG + GOM 8 + XU) ========
 # ============================================================================
 TOOL_CODE_XSMMIGV52 = r'''import os
 import sys
@@ -508,9 +449,15 @@ import random
 from urllib.parse import unquote
 from curl_cffi import requests as c_requests
 import requests
+from concurrent.futures import ThreadPoolExecutor
+import threading
 
 red = "\033[1;31m"; green = "\033[1;32m"; yellow = "\033[1;33m"
 cyan = "\033[1;36m"; white = "\033[0;37m"; reset = "\033[0m"
+
+print_lock = threading.Lock()
+def thread_safe_print(msg):
+    with print_lock: print(msg)
 
 class XSMMTool:
     def __init__(self, token):
@@ -550,7 +497,6 @@ class XSMMTool:
 BROWSER_PROFILES = [
     {"name": "Chrome 124", "impersonate": "chrome124", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36", "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"', "sec_ch_ua_platform": '"Windows"'},
     {"name": "Chrome 120", "impersonate": "chrome120", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "sec_ch_ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"', "sec_ch_ua_platform": '"Windows"'},
-    {"name": "Edge 124", "impersonate": "chrome124", "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 Edg/124.0.0.0", "sec_ch_ua": '"Chromium";v="124", "Microsoft Edge";v="124", "Not-A.Brand";v="99"', "sec_ch_ua_platform": '"Windows"'},
 ]
 
 def format_proxy(p):
@@ -603,8 +549,8 @@ def check_cookie_ig(cookie, proxy=None, profile=None):
     try: return c_requests.get(url, headers=h, proxies=format_proxy(proxy), impersonate=profile["impersonate"], timeout=30).text
     except Exception: return "{}"
 
-def ig_warmup_v52(session, cookie, profile):
-    print(f"{cyan}[*] Warmup...{reset}")
+def ig_warmup_v52(session, cookie, profile, tenfb):
+    thread_safe_print(f"{cyan}[*] [{tenfb}] Warmup...{reset}")
     try:
         session.get("https://www.instagram.com/", impersonate=profile["impersonate"], timeout=15)
         time.sleep(random.uniform(3, 6))
@@ -616,10 +562,10 @@ def ig_warmup_v52(session, cookie, profile):
             except: pass
         session.get("https://www.instagram.com/explore/", impersonate=profile["impersonate"], timeout=15)
         time.sleep(random.uniform(5, 10))
-        print(f"{green}[+] Warmup done{reset}")
+        thread_safe_print(f"{green}[+] [{tenfb}] Warmup done{reset}")
         return True
     except Exception as e:
-        print(f"{yellow}[!] Warmup fail: {e}{reset}")
+        thread_safe_print(f"{yellow}[!] [{tenfb}] Warmup fail: {e}{reset}")
         return False
 
 def follow(target_id, cookie, csrftoken, profile_url="", proxy=None, profile=None):
@@ -717,22 +663,126 @@ def parse_resp(t):
     if g.get("status") == "fail": return False, g.get("message", "fail")
     return True, "OK"
 
-def gui_nhan_xu(job_type, task_list, uid, cookie_check, xsmm):
+def gui_nhan_xu(job_type, task_list, uid, cookie_check, xsmm, tenfb):
     if not task_list: return
-    print(f"Gom {len(task_list)} task -> Gửi duyệt...")
+    thread_safe_print(f"[{tenfb}] Gom {len(task_list)} task -> Gửi duyệt...")
     ck = xsmm.complete_tasks(job_type, task_list, uid=uid, cookie_check=cookie_check)
     now = datetime.now().strftime("%H:%M:%S")
     if isinstance(ck, dict):
+        pts = ck.get('points', 0)
         if 'message' in ck:
-            print(f"[{now}] {ck['message']} (+{ck.get('points', 0)} xu)")
-        elif ck.get("is_timeout"):
-            print(f"[{now}] {ck['message']}")
-        elif 'error' in ck:
-            print(f"[{now}] LỖI: {ck['error']}")
+            thread_safe_print(f"[{now}] [{tenfb}] {ck['message']} (+{pts} xu)")
+            if pts > 0: thread_safe_print(f"[[XU_UPDATE]]|{tenfb}|{pts}")
+        elif ck.get("is_timeout"): thread_safe_print(f"[{now}] [{tenfb}] {ck['message']}")
+        elif 'error' in ck: thread_safe_print(f"[{now}] [{tenfb}] LỖI: {ck['error']}")
         if ck.get('countdown', 0) > 0: time.sleep(ck['countdown'])
 
+def run_account_v52(ad, listnv, dly, xsmm_token, doi, ck_global):
+    c = ad["cookie"]; p = ad.get("proxy", ""); prof = ad.get("profile") or BROWSER_PROFILES[0]
+    target_ck = ck_global if ck_global else c
+    acc = check_cookie_ig(c, p, profile=prof)
+    live = False; tenfb = ""; idfb = ""
+    try:
+        cfg = json.loads(acc)
+        if cfg and 'form_data' in cfg and cfg['form_data'].get('username'):
+            live = True; tenfb = cfg['form_data']['username']
+            m = re.search(r'ds_user_id=(\d+)', c); idfb = m.group(1) if m else str(cfg['form_data'].get('id', ''))
+    except: live = False
+    if not live or not idfb:
+        thread_safe_print(f"{red}[!] Cookie die{reset}"); return
+    thread_safe_print(f"{green}[+] NICK [{tenfb} | {idfb}]{reset}")
+
+    warmup_sess = c_requests.Session()
+    wp = format_proxy(p)
+    if wp: warmup_sess.proxies = wp
+    for item in c.split(';'):
+        if '=' in item:
+            try:
+                k, v = item.strip().split('=', 1); warmup_sess.cookies.set(k, v, domain='.instagram.com')
+            except Exception: pass
+    ig_warmup_v52(warmup_sess, c, prof, tenfb)
+    time.sleep(random.uniform(8, 15))
+
+    xsmm = XSMMTool(token=xsmm_token)
+    try:
+        al = xsmm.get_accounts(account_type="instagram", search=idfb)
+        if not (isinstance(al, dict) and al.get("accounts") and any(
+            str(a.get("account_id")) == str(idfb) for a in al["accounts"])):
+            xsmm.add_account("instagram", f"https://www.instagram.com/{tenfb}")
+    except Exception: pass
+
+    max_j = 0
+    cache = [] # BIẾN LƯU TASK FOLLOW CHO RIÊNG NICK NÀY
+    while max_j < doi:
+        jt = random.choice(listnv)
+        jl = random.randint(3, 5); jdt = 0
+        if jt == 'instagram_like':
+            lv = xsmm.get_tasks(jt, uid=idfb)
+            if isinstance(lv, list) and lv:
+                solo = 0
+                for nv in lv:
+                    csf_m = re.search(r'csrftoken=([^;]+)', c); csf = csf_m.group(1) if csf_m else ""
+                    thread_safe_print(f"{yellow}[{tenfb}] [Tym] {nv.get('target_url', '')[:30]}...{reset}")
+                    r = tym(nv.get('target_id', ''), c, csf, nv.get('target_url', ''), proxy=p, profile=prof)
+                    max_j += 1; jdt += 1
+                    ok, err = parse_resp(r)
+                    if ok:
+                        gui_nhan_xu("instagram_like", [nv.get('id')], idfb, target_ck, xsmm, tenfb); solo = 0
+                    else: solo += 1
+                    time.sleep(random.randint(*dly['tym']) + random.uniform(0, 3))
+                    if solo > 4 or jdt >= jl or max_j >= doi: break
+        elif jt == 'instagram_follow':
+            lv = xsmm.get_tasks(jt, uid=idfb)
+            if isinstance(lv, list) and lv:
+                solo = 0
+                for nv in lv:
+                    tid = nv.get('target_id', ''); lj = nv.get('target_url', '')
+                    if not tid or not str(tid).isdigit(): continue
+                    csf_m = re.search(r'csrftoken=([^;]+)', c); csf = csf_m.group(1) if csf_m else ""
+                    r = follow(tid, c, csf, lj, proxy=p, profile=prof)
+                    max_j += 1; jdt += 1
+                    ok, _ = parse_resp(r)
+                    
+                    if ok: 
+                        solo = 0
+                        cache.append(nv.get('id'))
+                        thread_safe_print(f"{green}[+] [{tenfb}] Follow OK -> Đã gom ({len(cache)}/8){reset}")
+                        
+                        if len(cache) >= 8:
+                            gui_nhan_xu("instagram_follow", cache, idfb, target_ck, xsmm, tenfb)
+                            cache = [] # Reset
+                    else:
+                        solo += 1
+                        
+                    time.sleep(random.randint(*dly['follow']) + random.uniform(0, 5))
+                    if solo > 4 or jdt >= jl or max_j >= doi: break
+        elif jt == 'instagram_comment':
+            lv = xsmm.get_tasks(jt, uid=idfb)
+            if isinstance(lv, list) and lv:
+                solo = 0
+                for nv in lv:
+                    idm = nv.get('target_id', ''); nd = nv.get('comment', '❤️❤️❤️'); lj = nv.get('target_url', '')
+                    if not idm: continue
+                    csf_m = re.search(r'csrftoken=([^;]+)', c); csf = csf_m.group(1) if csf_m else ""
+                    r = cmt(idm, nd, c, csf, lj, proxy=p, profile=prof)
+                    max_j += 1; jdt += 1
+                    ok, err = parse_resp(r)
+                    if ok:
+                        gui_nhan_xu("instagram_comment", [nv.get('id')], idfb, target_ck, xsmm, tenfb); solo = 0
+                    else: solo += 1
+                    time.sleep(random.randint(*dly['cmt']) + random.uniform(0, 5))
+                    if solo > 4 or jdt >= jl or max_j >= doi: break
+        time.sleep(15)
+
 def main():
-    print(f"{cyan}===== XSMM IG V5.2 (WARMUP) ====={reset}")
+    print(f"{cyan}===== XSMM IG V5.2 (ĐA LUỒNG + GOM 8) ====={reset}")
+    sys.stdout.write("Số luồng (1-50): "); sys.stdout.flush()
+    try:
+        max_threads = int(input().strip())
+        if max_threads < 1: max_threads = 1
+        if max_threads > 50: max_threads = 50
+    except: max_threads = 10
+
     sys.stdout.write("Access Token XSMM: "); sys.stdout.flush()
     token = input().strip()
 
@@ -798,115 +848,19 @@ def main():
 
     if not listnv: print(f"{red}[!] Chưa chọn job{reset}"); sys.exit()
 
-    print(f"{cyan}[*] Chạy {len(mangcookie)} nick{reset}\n")
-    xsmm = XSMMTool(token=token)
-    while True:
-        for l in range(len(mangcookie)-1, -1, -1):
-            ad = mangcookie[l]
-            c = ad["cookie"]; p = ad.get("proxy", ""); prof = ad.get("profile") or BROWSER_PROFILES[0]
-            target_ck = ck_global if ck_global else c
-            acc = check_cookie_ig(c, p, profile=prof)
-            live = False; tenfb = ""; idfb = ""
-            try:
-                cfg = json.loads(acc)
-                if cfg and 'form_data' in cfg and cfg['form_data'].get('username'):
-                    live = True; tenfb = cfg['form_data']['username']
-                    m = re.search(r'ds_user_id=(\d+)', c); idfb = m.group(1) if m else str(cfg['form_data'].get('id', ''))
-            except: live = False
-            if not live or not idfb:
-                print(f"{red}[!] Cookie die{reset}"); mangcookie.pop(l); continue
-            print(f"{green}[+] [{tenfb} | {idfb}]{reset}")
-
-            warmup_sess = c_requests.Session()
-            wp = format_proxy(p)
-            if wp: warmup_sess.proxies = wp
-            for item in c.split(';'):
-                if '=' in item:
-                    try:
-                        k, v = item.strip().split('=', 1); warmup_sess.cookies.set(k, v, domain='.instagram.com')
-                    except Exception: pass
-            ig_warmup_v52(warmup_sess, c, prof)
-            time.sleep(random.uniform(8, 15))
-
-            try:
-                al = xsmm.get_accounts(account_type="instagram", search=idfb)
-                if not (isinstance(al, dict) and al.get("accounts") and any(
-                    str(a.get("account_id")) == str(idfb) for a in al["accounts"])):
-                    xsmm.add_account("instagram", f"https://www.instagram.com/{tenfb}")
-            except Exception: pass
-
-            max_j = 0
-            cache = []
-            while max_j < doi:
-                jt = random.choice(listnv)
-                jl = random.randint(3, 5); jdt = 0
-                if jt == 'instagram_like':
-                    lv = xsmm.get_tasks(jt, uid=idfb)
-                    if isinstance(lv, list) and lv:
-                        solo = 0
-                        for nv in lv:
-                            csf_m = re.search(r'csrftoken=([^;]+)', c); csf = csf_m.group(1) if csf_m else ""
-                            print(f"[Tym] {nv.get('target_url', '')}")
-                            r = tym(nv.get('target_id', ''), c, csf, nv.get('target_url', ''), proxy=p, profile=prof)
-                            max_j += 1; jdt += 1
-                            ok, err = parse_resp(r)
-                            if ok:
-                                gui_nhan_xu("instagram_like", [nv.get('id')], idfb, target_ck, xsmm); solo = 0
-                            else: print(f"LỖI: {err}"); solo += 1
-                            time.sleep(random.randint(*dly['tym']) + random.uniform(0, 3))
-                            if solo > 4 or jdt >= jl or max_j >= doi: break
-                elif jt == 'instagram_follow':
-                    lv = xsmm.get_tasks(jt, uid=idfb)
-                    if isinstance(lv, list) and lv:
-                        solo = 0
-                        for nv in lv:
-                            tid = nv.get('target_id', ''); lj = nv.get('target_url', '')
-                            if not tid or not str(tid).isdigit(): continue
-                            csf_m = re.search(r'csrftoken=([^;]+)', c); csf = csf_m.group(1) if csf_m else ""
-                            print(f"[Follow] {tid}")
-                            r = follow(tid, c, csf, lj, proxy=p, profile=prof)
-                            max_j += 1; jdt += 1
-                            ok, _ = parse_resp(r)
-                            
-                            if ok: 
-                                solo = 0
-                                cache.append(nv.get('id'))
-                                print(f"   [+] Follow OK -> Đã gom ({len(cache)}/10)")
-                                if len(cache) >= 10:
-                                    gui_nhan_xu("instagram_follow", cache, idfb, target_ck, xsmm)
-                                    cache = [] # Reset
-                            else:
-                                print(f"   [-] Fail (Private/Block)")
-                                solo += 1
-                                
-                            time.sleep(random.randint(*dly['follow']) + random.uniform(0, 5))
-                            if solo > 4 or jdt >= jl or max_j >= doi: break
-                elif jt == 'instagram_comment':
-                    lv = xsmm.get_tasks(jt, uid=idfb)
-                    if isinstance(lv, list) and lv:
-                        solo = 0
-                        for nv in lv:
-                            idm = nv.get('target_id', ''); nd = nv.get('comment', '❤️❤️❤️'); lj = nv.get('target_url', '')
-                            if not idm: continue
-                            csf_m = re.search(r'csrftoken=([^;]+)', c); csf = csf_m.group(1) if csf_m else ""
-                            print(f"[CMT] {lj}")
-                            r = cmt(idm, nd, c, csf, lj, proxy=p, profile=prof)
-                            max_j += 1; jdt += 1
-                            ok, err = parse_resp(r)
-                            if ok:
-                                gui_nhan_xu("instagram_comment", [nv.get('id')], idfb, target_ck, xsmm); solo = 0
-                            else: print(f"LỖI: {err}"); solo += 1
-                            time.sleep(random.randint(*dly['cmt']) + random.uniform(0, 5))
-                            if solo > 4 or jdt >= jl or max_j >= doi: break
-                time.sleep(15)
-        if len(mangcookie) == 0: print(f"{red}[!] Hết cookie{reset}"); break
+    print(f"{cyan}[*] Chạy {len(mangcookie)} nick | {max_threads} luồng{reset}\n")
+    
+    with ThreadPoolExecutor(max_workers=max_threads) as executor:
+        futures = [executor.submit(run_account_v52, ad, listnv, dly, token, doi, ck_global) for ad in mangcookie]
+        for f in futures:
+            f.result()
 
 if __name__ == "__main__":
     main()
 '''
 
 # ============================================================================
-# ==================== TOOL 3: 11223.py (WARMUP) =============================
+# ==================== TOOL 3: 11223.py =====================================
 # ============================================================================
 TOOL_CODE_11223 = r'''import time
 import json
@@ -1090,7 +1044,7 @@ def complete_tasks(tt, uid, tids, ck_check):
 
 def main():
     print("=" * 50)
-    print("   SIMPLE IG BOT + WARMUP")
+    print("   SIMPLE IG BOT")
     print("=" * 50)
 
     sys.stdout.write("Access Token XSMM: "); sys.stdout.flush()
@@ -1130,10 +1084,6 @@ def main():
     xsmm_uid = sync_xsmm_id(un, av)
     print(f"[+] XSMM UID: {xsmm_uid}")
 
-    # Warmup trước khi chạy
-    warmup_simple(ig, av, dtsg, ck)
-    time.sleep(random.uniform(8, 15))
-
     total = 0; cache = []
     while True:
         tasks = get_tasks(tt, xsmm_uid)
@@ -1156,8 +1106,8 @@ def main():
                     print(f"   [>>] {res}")
                     time.sleep(random.randint(dcmin, dcmax))
                 elif tt == "instagram_follow":
-                    cache.append(tid); print(f"   [>>] Cache: {len(cache)}/12")
-                    if len(cache) >= 12:
+                    cache.append(tid); print(f"   [>>] Cache: {len(cache)}/8")
+                    if len(cache) >= 8:
                         res = complete_tasks(tt, xsmm_uid, cache, ck)
                         print(f"   [>>] {res}"); cache = []
                         time.sleep(random.randint(dcmin, dcmax))
@@ -1171,28 +1121,27 @@ if __name__ == "__main__":
     main()
 '''
 
-
 # ============================================================================
 # ==================== KHAI BÁO TOOLS ========================================
 # ============================================================================
 EMBEDDED_TOOLS = {
     "xsmmv3.2": {
         "name": "XSMM Tool V3.2",
-        "desc": "Tool Instagram Auto Jobs - Multi-thread + Warmup",
+        "desc": "Tool Instagram Auto Jobs - Multi-thread",
         "color": "#00d4ff",
         "filename": "xsmmv3.2.py",
         "code": TOOL_CODE_XSMMV32,
     },
     "xsmmigv5.2": {
         "name": "XSMM IG V5.2",
-        "desc": "Tool Instagram - Browser Profiles + Warmup",
+        "desc": "Tool Instagram - Browser Profiles",
         "color": "#ff6b9d",
         "filename": "xsmmigv5.2.py",
         "code": TOOL_CODE_XSMMIGV52,
     },
     "11223": {
         "name": "Simple IG Bot",
-        "desc": "Tool Like/Follow/Comment + Warmup",
+        "desc": "Tool Like/Follow/Comment",
         "color": "#ffd93d",
         "filename": "11223.py",
         "code": TOOL_CODE_11223,
@@ -1507,10 +1456,9 @@ def on_join(data):
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print("=" * 60)
-    print(" 🚀 TA TOOL WEB - 3 TOOL IG (WARMUP) + 2 TOOL FB")
+    print(" 🚀 TA TOOL WEB - 3 TOOL IG + 2 TOOL FB")
     print(f" 📁 Temp tools: {TEMP_TOOLS_DIR}")
     print(f" 🌐 Port: {port}")
     print(f" 📦 Tools: {list(EMBEDDED_TOOLS.keys())}")
-    print(f" 📘 FB: Reg Page (multi-thread), Chuyển Page")
     print("=" * 60)
     socketio.run(app, host='0.0.0.0', port=port, debug=False, allow_unsafe_werkzeug=True)
