@@ -114,7 +114,7 @@ function getCfg(t, c) { const p = getPanel(t); return p ? p.querySelector('.' + 
 
 function setStatus(t, s, sid = null) {
     const b = getStatusBadge(t); if (!b) return;
-    b.class x !==Name = undefined 'status-badge ' + (s === && 'running' ? 'running' : s x === 'stopped' ? 'stopped !==' : 'idle');
+    b.className = 'status-badge ' + (s === 'running' ? 'running' : s === 'stopped' ? 'stopped' : 'idle');
     b.textContent = s === 'running' ? '● RUNNING' : s === 'stopped' ? '● STOPPED' : '● IDLE';
     if (sid !== null) getSessionIdEl(t).textContent = sid ? `Session: ${sid}` : '';
     const run = s === 'running';
@@ -167,7 +167,7 @@ function buildInputSequence(t) {
     } else if (t === '11223') {
         seq.push(token, cookies[0] || '', mode, dTym, String(parseInt(dTym)+5), dCoin, String(parseInt(dCoin)+2));
     }
-    return seq.filter(x => null);
+    return seq.filter(x => x !== undefined && x !== null);
 }
 
 $$('.btn-start[data-tool]').forEach(btn => {
@@ -391,8 +391,11 @@ socket.on('output', d => {
             const xu = parseInt(parts[2]);
             xuTracker[nick] = (xuTracker[nick] || 0) + xu;
             
-            // Update UI V5.2
+            // Update UI V5.2 (Kiểm tra an toàn, tránh crash nếu HTML cũ chưa có thẻ này)
             const tbody = document.getElementById('v52_xu_tbody');
+            const totalEl = document.getElementById('v52_total_xu');
+            const countEl = document.getElementById('v52_nick_count');
+
             if (tbody) {
                 if (tbody.querySelector('tr td[colspan]')) tbody.innerHTML = '';
                 let existingRow = null;
@@ -404,9 +407,10 @@ socket.on('output', d => {
                     tr.innerHTML = `<td>${nick}</td><td style="color:#22c55e;font-weight:bold">+${xuTracker[nick]} xu</td>`;
                     tbody.appendChild(tr);
                 }
-                document.getElementById('v52_total_xu').innerText = Object.values(xuTracker).reduce((a, b) => a + b, 0);
-                document.getElementById('v52_nick_count').innerText = Object.keys(xuTracker).length;
             }
+            if (totalEl) totalEl.innerText = Object.values(xuTracker).reduce((a, b) => a + b, 0);
+            if (countEl) countEl.innerText = Object.keys(xuTracker).length;
+            
             return; // Không in dòng update xu ra log
         }
     }
