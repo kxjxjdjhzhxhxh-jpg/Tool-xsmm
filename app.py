@@ -31,6 +31,10 @@ os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
 sessions = {}
 sessions_lock = threading.Lock()
 
+# BIẾN LƯU TRỮ THỐNG KÊ THEO TỪNG NICK
+NICK_STATS = {}
+STATS_LOCK = threading.Lock()
+
 FB_REG_STATE = {
     "running": False,
     "results": [],
@@ -260,6 +264,7 @@ def gui_nhan_xu(job_type, task_list, uid, cookie_check, xsmm, tenfb):
         pts = ck.get('points', 0)
         if 'message' in ck:
             thread_safe_print(f"[{now}] [{tenfb}] {ck['message']} (+{pts} xu)")
+            # BẮT LOG ĐỂ WEBSOCKET ĐỌC
             if pts > 0: thread_safe_print(f"[[XU_UPDATE]]|{tenfb}|{pts}|{len(task_list)}")
         elif ck.get("is_timeout"): thread_safe_print(f"[{now}] [{tenfb}] {ck['message']}")
         elif 'error' in ck: thread_safe_print(f"[{now}] [{tenfb}] LỖI: {ck['error']}")
@@ -1012,21 +1017,72 @@ def api_ig_login_start():
     return jsonify({"ok": True})
 
 # ============================================================================
-# ==================== ROUTES CƠ BẢN =========================================
+# ==================== ROUTES CƠ BẢN & XỬ LÝ STATS ==========================
 # ============================================================================
 def ensure_tool_file(k):
     f = os.path.join(TEMP_TOOLS_DIR, EMBEDDED_TOOLS[k]["filename"])
     with open(f, "w", encoding="utf-8") as fw: fw.write(EMBEDDED_TOOLS[k]["code"])
     return f
 
+def update_nick_stats(sid, nick, is_job=False, xu_amount=0, status="Đang chạy"):
+    global NICK_STATS
+    with STATS_LOCK:
+        if nick not in NICK_STATS:
+            NICK_STATS[nick] = {"jobs": 0, "xu": 0, "status": status}
+        
+        if is_job:
+            NICK_STATS[nick]["jobs"] += 1
+            
+        if xu_amount > 0:
+            NICK_STATS[nick]["xu"] += xu_amount
+            
+        NICK_STATS[nick]["status"] = status
+        socketio.emit('table_update', NICK_STATS, room=sid)
+
 def read_process_output(sid, process):
+    current_nick = "Chưa xác định"
     try:
         for line in iter(process.stdout.readline, ''):
             if line == '' and process.poll() is not None: break
-            if line: socketio.emit('output', {'session_id': sid, 'line': line.rstrip(), 'ts': datetime.now().strftime('%H:%M:%S')}, room=sid)
-    except: pass
+            if line:
+                line_str = line.rstrip()
+                
+                # Gửi log thô
+                socketio.emit('output', {'session_id': sid, 'line': line_str, 'ts': datetime.now().strftime('%H:%M:%S')}, room=sid)
+                
+                # BẮT LOG TÊN NICK ĐỂ HIỂN THỊ LÊN BẢNG
+                match_nick = re.search(r'NICK(?:\s+LIVE)?\s*\[([^|\]]+)', line_str)
+                if match_nick:
+                    current_nick = match_nick.group(1).strip()
+                    update_nick_stats(sid, current_nick, is_job=False, status="Đang chạy")
+
+                # BẮT LOG XU & JOB THEO ĐỊNH DẠNG RIÊNG CỦA TOOL
+                # 1. Tool có in dòng [[XU_UPDATE]]|tennick|số_xu|số_job (cực kỳ chính xác)
+                match_xu_custom = re.search(r'\[\[XU_UPDATE\]\]\|(.*?)\|(\d+)\|(\d+)', line_str)
+                if match_xu_custom:
+                    nick_in_log = match_xu_custom.group(1).strip()
+                    xu_nhan = int(match_xu_custom.group(2))
+                    jobs_done = int(match_xu_custom.group(3))
+                    update_nick_stats(sid, nick_in_log, is_job=True, xu_amount=xu_nhan)
+                
+                # 2. Đề phòng tool in chuỗi text thông thường: "Thành công (+51 xu, 3/3 job)"
+                elif "Thành công" in line_str and "xu" in line_str:
+                    match_xu_text = re.search(r'\[(.*?)\].*?\(\+(\d+)\s*xu', line_str)
+                    if match_xu_text:
+                        nick_in_log = match_xu_text.group(1).strip()
+                        xu_nhan = int(match_xu_text.group(2))
+                        update_nick_stats(sid, nick_in_log, is_job=True, xu_amount=xu_nhan)
+                    else:
+                        update_nick_stats(sid, current_nick, is_job=True)
+
+    except Exception as e:
+        print(f"Lỗi đọc log: {e}")
     finally:
         process.wait()
+        with STATS_LOCK:
+            for n in NICK_STATS:
+                NICK_STATS[n]["status"] = "Đã dừng"
+            socketio.emit('table_update', NICK_STATS, room=sid)
         socketio.emit('status', {'session_id': sid, 'status': 'stopped'}, room=sid)
 
 @app.route('/')
