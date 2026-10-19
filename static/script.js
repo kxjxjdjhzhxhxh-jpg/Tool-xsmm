@@ -90,7 +90,7 @@ $$('.btn-start[data-tool]').forEach(btn => {
         const token = (getCfg(t, 'cfg-token')?.value || '').trim();
         const ck = (getCfg(t, 'cfg-cookies')?.value || '').trim();
         if (!token) return alert('Nhập Token XSMM!');
-        if (!ck) return alert('Nhập Cookie hoặc TK|MK!');
+        if (!ck) return alert('Nhập Cookie!');
         btn.disabled = true;
         const res = await fetch(`/api/start/${t}`, { method: 'POST' });
         const d = await res.json();
@@ -107,6 +107,14 @@ $$('.btn-start[data-tool]').forEach(btn => {
                 if (term) appendLine(term, `> [auto] ${s}`);
             }
         } else btn.disabled = false;
+    });
+});
+
+$$('.btn-stop').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const t = btn.dataset.tool; const s = state[t];
+        if (s) { await fetch(`/api/stop/${s.sessionId}`, { method: 'POST' }); }
+        setStatus(t, 'stopped'); fxStop(t);
     });
 });
 
@@ -209,13 +217,8 @@ socket.on('output', d => {
     }
 
     const div = document.createElement('div');
-    if (isFollowGom) {
-        div.style.color = '#22c55e';
-        div.style.fontWeight = 'bold';
-        div.style.textShadow = '0 0 8px #22c55e';
-    } else {
-        div.className = 'term-line ' + classifyLine(line);
-    }
+    if (isFollowGom) { div.style.color = '#22c55e'; div.style.fontWeight = 'bold'; div.style.textShadow = '0 0 8px #22c55e'; } 
+    else { div.className = 'term-line ' + classifyLine(line); }
     div.innerHTML = `<span class="ts">[${ts||now()}]</span>${escapeHtml(line)}`;
     term.appendChild(div);
     term.scrollTop = term.scrollHeight;
