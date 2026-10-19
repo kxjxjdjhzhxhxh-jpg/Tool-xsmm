@@ -188,6 +188,11 @@ $$('.btn-start[data-tool]').forEach(btn => {
             socket.emit('join', { session_id: d.session_id });
             fxStart(t);
             const term = getTerm(t); if (term) { term.innerHTML = ''; appendLine(term, `▶ Bắt đầu [${t}] — Session: ${d.session_id}`); }
+            
+            // Xóa bảng thống kê cũ khi bắt đầu chạy lại
+            const tbody = document.querySelector(`.stats-table-body-${t}`);
+            if (tbody) tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #888;">Đang chờ dữ liệu...</td></tr>';
+
             await new Promise(r => setTimeout(r, 3000));
             const seq = buildInputSequence(t);
             for (let i = 0; i < seq.length; i++) {
@@ -314,39 +319,18 @@ socket.on('fb_reg_done', d => {
     alert(`Hoàn tất FB! OK: ${d.success}, Lỗi: ${d.fail}`);
 });
 
-// ================== SOCKET CHUNG ==================
-const xuTracker = {};
+// ================== SOCKET CHUNG & BẢNG THỐNG KÊ ==================
 socket.on('output', d => {
     const { session_id, line, ts } = d;
     const t = Object.keys(state).find(k => state[k].sessionId === session_id);
     if (!t) return;
     const term = getTerm(t); if (!term) return;
     
-    // Highlight đếm Follow
     let isFollowGom = line.includes('Đã gom (') && line.includes('/8)');
     let isXuUpdate = line.includes('[[XU_UPDATE]]');
     
-    if (isXuUpdate) {
-        const parts = line.split('|');
-        if (parts.length >= 4) {
-            const nick = parts[1]; const xu = parseInt(parts[2]);
-            xuTracker[nick] = (xuTracker[nick] || 0) + xu;
-            
-            const tbody = document.getElementById('v52_xu_tbody');
-            const totalEl = document.getElementById('v52_total_xu');
-            const countEl = document.getElementById('v52_nick_count');
-            if (tbody) {
-                if (tbody.querySelector('tr td[colspan]')) tbody.innerHTML = '';
-                let existingRow = null;
-                tbody.querySelectorAll('tr').forEach(tr => { if (tr.cells[0].innerText === nick) existingRow = tr; });
-                if (existingRow) { existingRow.cells[1].innerText = "+" + xuTracker[nick] + " xu"; } 
-                else { const tr = document.createElement('tr'); tr.innerHTML = `<td>${nick}</td><td style="color:#22c55e;font-weight:bold">+${xuTracker[nick]} xu</td>`; tbody.appendChild(tr); }
-            }
-            if (totalEl) totalEl.innerText = Object.values(xuTracker).reduce((a, b) => a + b, 0);
-            if (countEl) countEl.innerText = Object.keys(xuTracker).length;
-            return; 
-        }
-    }
+    // Ẩn dòng XU_UPDATE khỏi console vì đã có bảng thống kê
+    if (isXuUpdate) return; 
 
     const div = document.createElement('div');
     if (isFollowGom) {
@@ -361,6 +345,37 @@ socket.on('output', d => {
     term.scrollTop = term.scrollHeight;
 
     const cnt = getOutputCount(t); if (cnt) cnt.textContent = term.children.length + ' dòng';
+});
+
+// LẮNG NGHE SỰ KIỆN CẬP NHẬT BẢNG THỐNG KÊ TỪ BACKEND
+socket.on('table_update', function(nickStats) {
+    const tbody = document.querySelector('.tool-panel.active .stats-table-wrap tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = ''; 
+    let stt = 1;
+    let hasData = false;
+
+    for (const [nickname, data] of Object.entries(nickStats)) {
+        hasData = true;
+        let statusColor = data.status === "Đang chạy" ? "#00ff00" : "#ff4444";
+        
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #333';
+        tr.innerHTML = `
+            <td style="padding: 10px;">${stt}</td>
+            <td style="padding: 10px; font-weight: bold; color: #00d4ff;">${nickname}</td>
+            <td style="padding: 10px;">${data.jobs} job</td>
+            <td style="padding: 10px; color: #ffd93d; font-weight: bold;">+${data.xu} xu</td>
+            <td style="padding: 10px; color: ${statusColor};">${data.status}</td>
+        `;
+        tbody.appendChild(tr);
+        stt++;
+    }
+
+    if (!hasData) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #888;">Chưa có dữ liệu...</td></tr>';
+    }
 });
 
 socket.on('status', d => {
