@@ -155,8 +155,7 @@ function buildInputSequence(t) {
         seq.push(jF ? 'on' : 'off'); if (jF) seq.push(dFol);
         seq.push(jC ? 'on' : 'off'); if (jC) seq.push(dCmt);
     } else if (t === 'xsmmigv5.2') {
-        seq.push(thr);
-        seq.push(token);
+        seq.push(thr, token);
         if (ckCk) { seq.push('1', ckCk); } else seq.push('0');
         seq.push(String(cookies.length));
         for (let i = 0; i < cookies.length; i++) seq.push(cookies[i], proxies[i] || '');
@@ -171,7 +170,7 @@ function buildInputSequence(t) {
 }
 
 $$('.btn-start[data-tool]').forEach(btn => {
-    if (btn.id === 'btn_fb_reg' || btn.id === 'btn_fb_chuyen') return;
+    if (btn.id === 'btn_fb_reg' || btn.id === 'btn_ig_login') return;
     btn.addEventListener('click', async () => {
         const t = btn.dataset.tool;
         if (!['xsmmv3.2','xsmmigv5.2','11223'].includes(t)) return;
@@ -239,179 +238,113 @@ function sendStdin(t) {
 $$('.btn-send').forEach(btn => btn.addEventListener('click', () => sendStdin(btn.dataset.tool)));
 $$('.stdin-input').forEach(inp => inp.addEventListener('keydown', e => { if (e.key === 'Enter') sendStdin(inp.dataset.tool); }));
 
-// ================== FB REG PAGE MULTI-THREAD ==================
-const btnFbReg = document.getElementById('btn_fb_reg');
-const btnFbRegStop = document.getElementById('btn_fb_reg_stop');
-const btnFbRegClear = document.getElementById('btn_fb_reg_clear');
-const btnFbRegExport = document.getElementById('btn_fb_reg_export');
-let fbRows = [];
-let fbTimer = null;
+// ================== IG LOGIN ==================
+document.getElementById('btn_ig_login')?.addEventListener('click', async () => {
+    const tasksRaw = document.getElementById('ig_login_tasks').value.trim();
+    const threads = document.getElementById('ig_login_threads').value;
+    if (!tasksRaw) return alert('Nhập danh sách TK!');
+    
+    const lines = tasksRaw.split('\n').map(l => l.trim()).filter(Boolean);
+    const tasks = lines.map(l => {
+        const p = l.split('|');
+        return { acc: l, proxy: p[3] || '' };
+    });
+    
+    document.getElementById('ig_login_tbody').innerHTML = '';
+    const res = await fetch('/api/ig_login_start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tasks, threads}) });
+    if ((await res.json()).ok) fxStart('ig_login');
+});
 
-function fbFormatTime(sec) {
-    const h = Math.floor(sec/3600), m = Math.floor((sec%3600)/60), s = sec%60;
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-}
-
-function fbRenderRow(r) {
-    const tbody = document.getElementById('fb_reg_tbody');
-    if (!tbody) return;
+socket.on('ig_login_update', d => {
+    const tbody = document.getElementById('ig_login_tbody');
+    if (!tbody || !d.result) return;
     if (tbody.querySelector('tr td[colspan]')) tbody.innerHTML = '';
-    const statusCls = r.ok ? 'status-ok' : (r.status.includes('Đang') || r.status.includes('chờ') ? 'status-wait' : 'status-fail');
+    const r = d.result;
+    const color = r.ok ? '#22c55e' : '#ef4444';
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.idx}</td><td style="font-family:monospace">${r.uid || '-'}</td><td>${r.page_id || '-'}</td><td>${r.page_name}</td><td style="font-family:monospace">${r.ip}</td><td>${r.timezone}</td><td class="${statusCls}">${r.status}</td>`;
+    tr.innerHTML = `<td>${r.idx}</td><td>${r.acc.split('|')[0]}</td><td style="color:${color}">${r.status}</td><td style="font-size:10px;max-width:100px;overflow:hidden;white-space:nowrap">${r.cookie}</td>`;
     tbody.appendChild(tr);
     tbody.scrollTop = tbody.scrollHeight;
-}
+});
 
-if (btnFbReg) {
-    btnFbReg.addEventListener('click', async () => {
-        const tasksRaw = document.getElementById('fb_reg_tasks').value.trim();
-        const namesRaw = document.getElementById('fb_reg_names').value.trim();
-        const cat = document.getElementById('fb_reg_cat').value.trim() || '2200';
-        const threads = parseInt(document.getElementById('fb_reg_threads').value) || 10;
+// ================== FB REG PAGE NÂNG CAO ==================
+document.getElementById('btn_fb_reg')?.addEventListener('click', async () => {
+    const tasksRaw = document.getElementById('fb_reg_tasks').value.trim();
+    const namesRaw = document.getElementById('fb_reg_names').value.trim();
+    const avatarsRaw = document.getElementById('fb_reg_avatars').value.trim();
+    const coversRaw = document.getElementById('fb_reg_covers').value.trim();
+    const uidNhan = document.getElementById('fb_reg_uid').value.trim();
+    const threads = document.getElementById('fb_reg_threads').value;
+    
+    if (!tasksRaw || !namesRaw) return alert('Nhập Cookie và Tên Page!');
+    const taskLines = tasksRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    const nameLines = namesRaw.split('\n').map(s => s.trim()).filter(Boolean);
+    const avatarLines = avatarsRaw ? avatarsRaw.split('\n').map(s => s.trim()).filter(Boolean) : [];
+    const coverLines = coversRaw ? coversRaw.split('\n').map(s => s.trim()).filter(Boolean) : [];
+    
+    const tasks = [];
+    for (let i = 0; i < taskLines.length; i++) {
+        const parts = taskLines[i].split('|');
+        tasks.push({
+            cookie: parts[0].trim(), proxy: parts[1]?.trim() || '', page_name: nameLines[i % nameLines.length],
+            avatar: avatarLines[i % avatarLines.length] || '', cover: coverLines[i % coverLines.length] || '', target_uid: uidNhan
+        });
+    }
+    
+    document.getElementById('fb_reg_tbody').innerHTML = '';
+    const res = await fetch('/api/fb_reg_start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tasks, threads}) });
+    if ((await res.json()).ok) { fxStart('fb_regpage'); alert('Bắt đầu reg page + chuyển QTV!'); }
+});
 
-        if (!tasksRaw || !namesRaw) { alert('Nhập danh sách nick và tên page!'); return; }
-        const taskLines = tasksRaw.split('\n').map(s => s.trim()).filter(Boolean);
-        const nameLines = namesRaw.split('\n').map(s => s.trim()).filter(Boolean);
-        if (taskLines.length === 0 || nameLines.length === 0) { alert('Danh sách trống!'); return; }
+socket.on('fb_reg_update', d => {
+    const tbody = document.getElementById('fb_reg_tbody');
+    if (!tbody || !d.result) return;
+    if (tbody.querySelector('tr td[colspan]')) tbody.innerHTML = '';
+    const r = d.result;
+    const color = r.ok ? 'status-ok' : 'status-fail';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.idx}</td><td>${r.uid}</td><td>${r.page_id}</td><td>${r.page_name}</td><td class="${color}">${r.status}</td>`;
+    tbody.appendChild(tr);
+    tbody.scrollTop = tbody.scrollHeight;
+    if(d.stats){ document.getElementById('fb_stat_ok').innerText=d.stats.success; document.getElementById('fb_stat_err').innerText=d.stats.fail; }
+});
 
-        const tasks = [];
-        for (let i = 0; i < taskLines.length; i++) {
-            const parts = taskLines[i].split('|');
-            tasks.push({ cookie: parts[0].trim(), proxy: parts[1]?.trim() || '', page_name: nameLines[i % nameLines.length], category_id: cat });
-        }
+socket.on('fb_reg_done', d => {
+    fxStop('fb_regpage');
+    alert(`Hoàn tất FB! OK: ${d.success}, Lỗi: ${d.fail}`);
+});
 
-        document.getElementById('fb_reg_tbody').innerHTML = '';
-        fbRows = [];
-        document.getElementById('fb_stat_acc').textContent = taskLines.length;
-        document.getElementById('fb_stat_ok').textContent = '0';
-        document.getElementById('fb_stat_err').textContent = '0';
-        document.getElementById('fb_stat_threads').textContent = `0/${threads}`;
-
-        btnFbReg.disabled = true;
-        btnFbRegStop.disabled = false;
-        fxStart('fb_regpage');
-
-        try {
-            const res = await fetch('/api/fb_reg_start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tasks, threads }) });
-            const d = await res.json();
-            if (!d.ok) { alert('Lỗi: ' + (d.error || '')); btnFbReg.disabled = false; btnFbRegStop.disabled = true; fxStop('fb_regpage'); return; }
-        } catch (e) { alert('Lỗi: ' + e.message); btnFbReg.disabled = false; btnFbRegStop.disabled = true; fxStop('fb_regpage'); }
-
-        clearInterval(fbTimer);
-        fbTimer = setInterval(async () => {
-            try {
-                const r = await fetch('/api/fb_reg_stats');
-                const d = await r.json();
-                document.getElementById('fb_stat_ok').textContent = d.success;
-                document.getElementById('fb_stat_err').textContent = d.fail;
-                document.getElementById('fb_stat_time').textContent = fbFormatTime(d.elapsed);
-                if (!d.running) { clearInterval(fbTimer); btnFbReg.disabled = false; btnFbRegStop.disabled = true; }
-            } catch (e) {}
-        }, 1000);
-    });
-}
-
-if (btnFbRegStop) {
-    btnFbRegStop.addEventListener('click', async () => {
-        if (!confirm('Dừng FB Reg?')) return;
-        await fetch('/api/fb_reg_stop', { method: 'POST' });
-        btnFbReg.disabled = false;
-        btnFbRegStop.disabled = true;
-        fxStop('fb_regpage');
-    });
-}
-
-if (btnFbRegClear) {
-    btnFbRegClear.addEventListener('click', () => {
-        document.getElementById('fb_reg_tbody').innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;padding:20px">Chưa có dữ liệu...</td></tr>';
-        fbRows = [];
-        document.getElementById('fb_stat_acc').textContent = '0';
-        document.getElementById('fb_stat_ok').textContent = '0';
-        document.getElementById('fb_stat_err').textContent = '0';
-        document.getElementById('fb_stat_time').textContent = '00:00:00';
-    });
-}
-
-if (btnFbRegExport) {
-    btnFbRegExport.addEventListener('click', () => {
-        if (fbRows.length === 0) { alert('Chưa có dữ liệu!'); return; }
-        const lines = fbRows.map(r => `${r.idx}|${r.uid}|${r.page_id}|${r.page_name}|${r.ip}|${r.status}`);
-        const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `fb_reg_${Date.now()}.txt`;
-        a.click();
-    });
-}
-
-// ================== FB CHUYỂN PAGE ==================
-const btnFbChuyen = document.getElementById('btn_fb_chuyen');
-if (btnFbChuyen) {
-    btnFbChuyen.addEventListener('click', async () => {
-        const ck = document.getElementById('fb_chuyen_cookie').value.trim();
-        const pw = document.getElementById('fb_chuyen_pass').value.trim();
-        const pid = document.getElementById('fb_chuyen_pageid').value.trim();
-        const uid = document.getElementById('fb_chuyen_uid').value.trim();
-        const term = document.getElementById('term-fb_chuyenpage');
-
-        if (!ck || !pid || !uid) { alert('Nhập Cookie / Page ID / UID!'); return; }
-        btnFbChuyen.disabled = true;
-        fxStart('fb_chuyenpage');
-        if (term) { term.innerHTML = ''; appendLine(term, `▶ Chuyển Page ${pid} → ${uid}`); }
-
-        try {
-            const res = await fetch('/api/fb_chuyenpage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cookie: ck, password: pw, page_id: pid, uid_nhan: uid }) });
-            const d = await res.json();
-            if (d.ok) { appendLine(term, `✅ ${d.message}`, now()); alert('✅ ' + d.message); }
-            else { appendLine(term, `❌ ${d.message}`, now()); alert('❌ ' + d.message); }
-        } catch (e) { appendLine(term, `❌ Lỗi: ${e.message}`, now()); alert('Lỗi: ' + e.message); }
-        btnFbChuyen.disabled = false;
-        setTimeout(() => fxStop('fb_chuyenpage'), 2000);
-    });
-}
-
-// ================== SOCKET ==================
+// ================== SOCKET CHUNG ==================
 const xuTracker = {};
-
 socket.on('output', d => {
     const { session_id, line, ts } = d;
     const t = Object.keys(state).find(k => state[k].sessionId === session_id);
     if (!t) return;
     const term = getTerm(t); if (!term) return;
     
-    // Highlight dòng đếm Follow thành công (màu xanh lá cây)
+    // Highlight đếm Follow
     let isFollowGom = line.includes('Đã gom (') && line.includes('/8)');
     let isXuUpdate = line.includes('[[XU_UPDATE]]');
     
     if (isXuUpdate) {
         const parts = line.split('|');
-        if (parts.length === 3) {
-            const nick = parts[1];
-            const xu = parseInt(parts[2]);
+        if (parts.length >= 4) {
+            const nick = parts[1]; const xu = parseInt(parts[2]);
             xuTracker[nick] = (xuTracker[nick] || 0) + xu;
             
-            // Update UI V5.2 (Kiểm tra an toàn, tránh crash nếu HTML cũ chưa có thẻ này)
             const tbody = document.getElementById('v52_xu_tbody');
             const totalEl = document.getElementById('v52_total_xu');
             const countEl = document.getElementById('v52_nick_count');
-
             if (tbody) {
                 if (tbody.querySelector('tr td[colspan]')) tbody.innerHTML = '';
                 let existingRow = null;
                 tbody.querySelectorAll('tr').forEach(tr => { if (tr.cells[0].innerText === nick) existingRow = tr; });
-                if (existingRow) {
-                    existingRow.cells[1].innerText = "+" + xuTracker[nick] + " xu";
-                } else {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${nick}</td><td style="color:#22c55e;font-weight:bold">+${xuTracker[nick]} xu</td>`;
-                    tbody.appendChild(tr);
-                }
+                if (existingRow) { existingRow.cells[1].innerText = "+" + xuTracker[nick] + " xu"; } 
+                else { const tr = document.createElement('tr'); tr.innerHTML = `<td>${nick}</td><td style="color:#22c55e;font-weight:bold">+${xuTracker[nick]} xu</td>`; tbody.appendChild(tr); }
             }
             if (totalEl) totalEl.innerText = Object.values(xuTracker).reduce((a, b) => a + b, 0);
             if (countEl) countEl.innerText = Object.keys(xuTracker).length;
-            
-            return; // Không in dòng update xu ra log
+            return; 
         }
     }
 
@@ -443,31 +376,7 @@ socket.on('status', d => {
     }
 });
 
-socket.on('fb_reg_update', d => {
-    if (d.result) { fbRows.push(d.result); fbRenderRow(d.result); }
-    if (d.stats) {
-        document.getElementById('fb_stat_ok').textContent = d.stats.success;
-        document.getElementById('fb_stat_err').textContent = d.stats.fail;
-        document.getElementById('fb_stat_time').textContent = fbFormatTime(d.stats.elapsed);
-    }
-});
-
-socket.on('fb_reg_done', d => {
-    document.getElementById('fb_stat_ok').textContent = d.success;
-    document.getElementById('fb_stat_err').textContent = d.fail;
-    document.getElementById('fb_stat_time').textContent = fbFormatTime(d.elapsed);
-    btnFbReg.disabled = false;
-    btnFbRegStop.disabled = true;
-    alert(`Hoàn tất! OK: ${d.success}, Lỗi: ${d.fail}`);
-    fxStop('fb_regpage');
-});
-
-socket.on('cleared', d => {
-    const t = Object.keys(state).find(k => state[k].sessionId === d.session_id);
-    if (t) { const term = getTerm(t); if (term) term.innerHTML = ''; }
-});
-
-// AUTO SAVE CONFIG
+// Lưu config tự động
 const CFG_FIELDS = ['cfg-token', 'cfg-cookies', 'cfg-cookiecheck', 'cfg-delay-tym', 'cfg-delay-follow', 'cfg-delay-comment', 'cfg-threads', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
 CFG_FIELDS.forEach(cls => {
     $$('.' + cls).forEach(inp => {
@@ -478,14 +387,3 @@ CFG_FIELDS.forEach(cls => {
         inp.addEventListener('input', () => localStorage.setItem(key, inp.value));
     });
 });
-['cfg-job-like', 'cfg-job-follow', 'cfg-job-comment'].forEach(cls => {
-    $$('.' + cls).forEach(cb => {
-        const t = cb.closest('.tool-panel')?.dataset.tool; if (!t) return;
-        const key = `ta_cfg_${t}_${cls}`;
-        const saved = localStorage.getItem(key);
-        if (saved !== null) cb.checked = saved === 'true';
-        cb.addEventListener('change', () => localStorage.setItem(key, cb.checked));
-    });
-});
-
-fetch('/api/sessions').then(r => r.json()).then(l => { const el = $('#sessions-count'); if (el) el.textContent = l.length + ' sessions'; });
