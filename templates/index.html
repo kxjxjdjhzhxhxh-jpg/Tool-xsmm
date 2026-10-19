@@ -13,7 +13,7 @@
             <span class="logo-icon">🚀</span>
             <div>
                 <h1>TA TOOL WEB MANAGER</h1>
-                <p class="subtitle">3 Tool IG (Warmup) + 2 Tool FB — MoMo: 0373607456</p>
+                <p class="subtitle">3 Tool IG + 2 Tool FB — TA Tool — MoMo: 0373607456</p>
             </div>
         </div>
         <div class="header-info">
@@ -36,7 +36,7 @@
         {% endfor %}
         <button class="tab-btn" data-tool="fb_regpage" style="--tab-color: #1877f2">
             <span class="tab-dot"></span>
-            FB Reg Page (10 luồng)
+            FB Reg Page
         </button>
         <button class="tab-btn" data-tool="fb_chuyenpage" style="--tab-color: #8b5cf6">
             <span class="tab-dot"></span>
@@ -96,6 +96,7 @@
                 <div class="form-row form-row-inline">
                     <label>🔀 Cấu hình:</label>
                     <div class="inline-inputs">
+                        <span>🔢 Số luồng <input type="number" class="cfg-input cfg-threads" value="10" min="1" max="50" style="width:70px"></span>
                         <span>Jobs đổi nick <input type="number" class="cfg-input cfg-rotate" value="99999" min="1" style="width:90px"></span>
                     </div>
                 </div>
@@ -106,7 +107,7 @@
                     <div class="inline-inputs">
                         <select class="cfg-input cfg-mode" style="width:220px">
                             <option value="1">1. Like</option>
-                            <option value="2">2. Follow (đủ 12)</option>
+                            <option value="2">2. Follow (đủ 8)</option>
                             <option value="3">3. Comment</option>
                         </select>
                         <span>Delay coin <input type="number" class="cfg-input cfg-delaycoin" value="3" min="1" style="width:70px"></span>
@@ -144,18 +145,15 @@
         <section class="tool-panel" data-tool="fb_regpage" data-safe="fb_regpage" style="--panel-color: #1877f2">
             <canvas class="fx-canvas-form"></canvas>
             <div class="config-form">
-                <div class="form-title">📘 FB REG PAGE — Đa luồng (10 luồng)</div>
-
+                <div class="form-title">📘 FB REG PAGE — Đa luồng</div>
                 <div class="form-row">
                     <label>📋 Danh sách Nick <small>(mỗi dòng: <code>cookie|proxy</code> hoặc <code>cookie|</code> nếu không proxy)</small>:</label>
                     <textarea class="cfg-input" id="fb_reg_tasks" rows="6" placeholder="c_user=1000xxx; xs=abc...|27.64.254.37:8080:user:pass&#10;c_user=1000yyy; xs=def...|117.6.234.108:3128:user:pass"></textarea>
                 </div>
-
                 <div class="form-row">
                     <label>📝 Danh sách Tên Page <small>(mỗi dòng 1 tên — sẽ ghép tương ứng với nick)</small>:</label>
                     <textarea class="cfg-input" id="fb_reg_names" rows="6" placeholder="Michelle Howard&#10;Carol Jones&#10;Debra Gonzalez&#10;Donald Anderson"></textarea>
                 </div>
-
                 <div class="form-row form-row-inline">
                     <label>📂 Category ID:</label>
                     <div class="inline-inputs">
@@ -163,8 +161,6 @@
                         <span>🔢 Số luồng <input type="number" class="cfg-input" id="fb_reg_threads" value="10" min="1" max="30" style="width:70px"></span>
                     </div>
                 </div>
-
-                <!-- Thống kê giống ảnh -->
                 <div class="fb-stats">
                     <div class="fb-stat"><span class="fb-stat-label">ACC</span><span class="fb-stat-val" id="fb_stat_acc">0</span></div>
                     <div class="fb-stat"><span class="fb-stat-label">PAGE OK</span><span class="fb-stat-val green" id="fb_stat_ok">0</span></div>
@@ -172,7 +168,6 @@
                     <div class="fb-stat"><span class="fb-stat-label">LUỒNG</span><span class="fb-stat-val" id="fb_stat_threads">0/10</span></div>
                     <div class="fb-stat"><span class="fb-stat-label">THỜI GIAN</span><span class="fb-stat-val" id="fb_stat_time">00:00:00</span></div>
                 </div>
-
                 <div class="form-actions">
                     <button class="btn btn-start" id="btn_fb_reg"><span class="btn-icon">▶</span> Bắt đầu chạy</button>
                     <button class="btn btn-stop" id="btn_fb_reg_stop" disabled><span class="btn-icon">⏹</span> Dừng</button>
@@ -180,7 +175,6 @@
                     <button class="btn btn-save" id="btn_fb_reg_export"><span class="btn-icon">💾</span> Xuất TXT</button>
                 </div>
             </div>
-
             <div class="terminal-wrap">
                 <div class="terminal-header">
                     <div class="dots"><span></span><span></span><span></span></div>
