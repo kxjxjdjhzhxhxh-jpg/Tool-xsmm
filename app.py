@@ -9,6 +9,10 @@ import tempfile
 import random
 import string
 import re
+import hmac
+import hashlib
+import base64
+import struct
 from datetime import datetime
 from queue import Queue
 from flask import Flask, render_template, request, jsonify
@@ -33,9 +37,9 @@ FB_REG_STATE = {"running": False, "total_success": 0, "total_fail": 0}
 FB_REG_LOCK = threading.Lock()
 
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py (DUY NHẤT) =====================
+# ==================== TOOL 2: xsmmigv5.2.py (NÂNG CẤP) =====================
 # ============================================================================
-TOOL_CODE_XSMMIGV52 = r'''import os, sys, time, json, re, random
+TOOL_CODE_XSMMIGV52 = r'''import os, sys, time, json, re, random, hmac, hashlib, base64, struct
 from datetime import datetime
 from urllib.parse import unquote
 from curl_cffi import requests as c_requests
@@ -66,29 +70,69 @@ class XSMMTool:
         try: return requests.post(f"{self.base_url}/tasks2/complete", headers=self.headers, json={"type": type_job, "task_id": task_ids, "uid": uid, "cookie_check": cookie_check}, timeout=35).json()
         except: return {}
 
-def login_get_cookie(acc_str, proxy):
+def get_otp_from_secret(secret):
+    # Hàm tự tạo mã OTP 6 số từ Secret Key (chuẩn TOTP)
+    try:
+        secret = secret.replace(" ", "").upper()
+        missing_padding = len(secret) % 8
+        if missing_padding: secret += '=' * (8 - missing_padding)
+        key = base64.b32decode(secret, casefold=True)
+        counter = int(time.time()) // 30
+        msg = struct.pack(">Q", counter)
+        h = hmac.new(key, msg, hashlib.sha1).digest()
+        o = h[19] & 15
+        h = (struct.unpack(">I", h[o:o+4])[0] & 0x7fffffff) % 1000000
+        return f"{h:06d}"
+    except Exception as e:
+        thread_safe_print(f"{red}[!] Lỗi giải mã 2FA: {e}{reset}")
+        return None
+
+def login_get_cookie(acc_str, proxy=None):
     try:
         parts = acc_str.strip().split('|')
-        user, pwd = parts[0], parts[1]
-        twofa = parts[2] if len(parts) > 2 else ""
+        if len(parts) < 2: return None
+        user = parts[0].strip()
+        pwd = parts[1].strip()
+        secret_2fa = parts[2].strip() if len(parts) > 2 else ""
+        
         proxies = {"http": proxy, "https": proxy} if proxy else None
         session = c_requests.Session(impersonate="chrome120")
         if proxies: session.proxies = proxies
+        
         headers = {'user-agent': 'Mozilla/5.0', 'x-ig-app-id': '936619743392459', 'content-type': 'application/x-www-form-urlencoded', 'origin': 'https://www.instagram.com', 'referer': 'https://www.instagram.com/'}
         session.get("https://www.instagram.com/", headers=headers)
         headers['x-csrftoken'] = session.cookies.get('csrftoken', '')
-        r = session.post("https://www.instagram.com/api/v1/web/accounts/login/ajax/", headers=headers, data={'username': user, 'enc_password': f"#PWD_INSTAGRAM_BROWSER:0:{int(time.time())}:{pwd}", 'queryParams': '{}', 'optIntoOneTap': 'false'})
+        
+        payload = {'username': user, 'enc_password': f"#PWD_INSTAGRAM_BROWSER:0:{int(time.time())}:{pwd}", 'queryParams': '{}', 'optIntoOneTap': 'false'}
+        r = session.post("https://www.instagram.com/api/v1/web/accounts/login/ajax/", headers=headers, data=payload)
         rj = r.json()
+        
         if rj.get("authenticated"):
             pass
         elif rj.get("two_factor_required"):
+            thread_safe_print(f"{cyan}[*] Nick {user} yêu cầu 2FA. Đang tự giải mã...{reset}")
+            otp_code = get_otp_from_secret(secret_2fa)
+            if not otp_code:
+                thread_safe_print(f"{red}[!] Không thể tạo OTP từ Secret Key của {user}{reset}")
+                return None
+                
+            thread_safe_print(f"{green}[*] Mã OTP: {otp_code}{reset}")
             two_fa_id = rj.get("two_factor_info", {}).get("two_factor_identifier")
-            r2 = session.post("https://www.instagram.com/api/v1/web/accounts/login/ajax/two_factor/", headers=headers, data={'username': user, 'verificationCode': twofa, 'two_factor_identifier': two_fa_id, 'trust_this_device': '0'})
-            if not r2.json().get("authenticated"): return None
-        else: return None
+            
+            r2 = session.post("https://www.instagram.com/api/v1/web/accounts/login/ajax/two_factor/", 
+                              headers=headers, 
+                              data={'username': user, 'verificationCode': otp_code, 'two_factor_identifier': two_fa_id, 'trust_this_device': '0'})
+            
+            if not r2.json().get("authenticated"): 
+                thread_safe_print(f"{red}[!] Sai mã 2FA hoặc Secret Key không đúng.{reset}")
+                return None
+        else: 
+            return None
+            
         cookies = session.cookies.get_dict()
         return "; ".join([f"{k}={v}" for k, v in cookies.items() if k in ['csrftoken', 'sessionid', 'ds_user_id', 'mid']])
-    except: return None
+    except Exception as e:
+        return None
 
 def get_headers(cookie, csrf):
     return {'accept': '*/*', 'cookie': cookie, 'x-csrftoken': csrf, 'x-ig-app-id': '936619743392459', 'user-agent': 'Mozilla/5.0'}
@@ -131,7 +175,7 @@ def cmt(mid, nd, c, csrf, url, proxy):
 
 def run_account(acc_input, listnv, config_delays, xsmm_token, dl, doi):
     if "|" in acc_input:
-        thread_safe_print(f"{yellow}[*] Đang login bằng TK|MK...{reset}")
+        thread_safe_print(f"{yellow}[*] Đang đăng nhập bằng TK|MK|2FA...{reset}")
         c = login_get_cookie(acc_input, None)
         if not c:
             thread_safe_print(f"{red}[!] Login thất bại hoặc sai 2FA{reset}")
