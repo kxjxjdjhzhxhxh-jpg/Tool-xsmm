@@ -21,6 +21,7 @@ function appendLine(el, line, ts = null) {
     el.appendChild(d); el.scrollTop = el.scrollHeight;
 }
 
+// TABS - Chỉ xử lý sự kiện click, không tự động click ở đây nữa
 $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const t = btn.dataset.tool;
@@ -28,7 +29,6 @@ $$('.tab-btn').forEach(btn => {
         $$('.tool-panel').forEach(p => p.classList.toggle('active', p.dataset.tool === t));
     });
 });
-$$('.tab-btn')[0]?.click();
 
 function getPanel(t) { return $(`.tool-panel[data-tool="${t}"]`); }
 function getTerm(t) { const p = getPanel(t); return p ? p.querySelector('.terminal') : null; }
@@ -121,30 +121,19 @@ $$('.btn-start[data-tool]').forEach(btn => {
             for (let i = 0; i < seq.length; i++) {
                 await new Promise(r => setTimeout(r, 300));
                 await fetch(`/api/input/${d.session_id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: seq[i] }) });
-                
-                // HIỂN THỊ FULL TEXT [AUTO] LÊN MÀN HÌNH CONSOLE
                 if (term) { appendLine(term, `> [auto] ${seq[i]}`, now()); }
             }
             $(`.tab-btn[data-tool="${t}"]`).click();
-        } catch (e) { alert('L asyncỗ ()i: ' + e.message); btn =>.disabled = false; }
+        } catch (e) { alert('Lỗi: ' + e.message); btn.disabled = false; }
     });
 });
 
-$$('. {
-btn-stop').forEach(btn => {
-    btn       .addEventListener('click', const t = btn.dataset.tool; const s = state[t]; if (!s) return;
+$$('.btn-stop').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const t = btn.dataset.tool; const s = state[t]; if (!s) return;
         if (!confirm('Dừng tool?')) return;
         await fetch(`/api/stop/${s.sessionId}`, { method: 'POST' });
         setStatus(t, 'stopped');
-    });
-});
-
-$$('.btn-clear').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const t = btn.dataset.tool;
-        const term = getTerm(t); if (term) term.innerHTML = '';
-        const cnt = getOutputCount(t); if (cnt) cnt.textContent = '0 dòng';
-        const s = state[t]; if (s) fetch(`/api/clear/${s.sessionId}`, { method: 'POST' });
     });
 });
 
@@ -162,7 +151,7 @@ $$('.stdin-input').forEach(inp => inp.addEventListener('keydown', e => { if (e.k
 document.getElementById('btn_ig_login')?.addEventListener('click', async () => {
     const tasksRaw = document.getElementById('ig_login_tasks').value.trim();
     const threads = document.getElementById('ig_login_threads').value;
-    if (!tasksRawấy to) return alert('Nhập danh sách TK!');
+    if (!tasksRaw) return alert('Nhập danh sách TK!');
     
     const lines = tasksRaw.split('\n').map(l => l.trim()).filter(Boolean);
     const tasks = lines.map(l => {
@@ -172,7 +161,6 @@ document.getElementById('btn_ig_login')?.addEventListener('click', async () => {
     
     document.getElementById('ig_login_tbody').innerHTML = '';
     const res = await fetch('/api/ig_login_start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tasks, threads}) });
-    if ((await res.json()).ok) {}
 });
 
 socket.on('ig_login_update', d => {
