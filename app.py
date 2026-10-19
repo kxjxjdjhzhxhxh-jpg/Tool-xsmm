@@ -1,42 +1,5 @@
 import os
 import sys
-import json
-import uuid
-import time
-import threading
-import subprocess
-import tempfile
-import random
-import string
-import re
-from datetime import datetime
-from queue import Queue
-from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO, emit, join_room
-import requests
-from curl_cffi import requests as c_requests
-
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'ta_tool_secret_2024'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-SESSIONS_DIR = os.path.join(BASE_DIR, "sessions")
-os.makedirs(SESSIONS_DIR, exist_ok=True)
-TEMP_TOOLS_DIR = os.path.join(tempfile.gettempdir(), "ta_tool_embedded")
-os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
-
-sessions = {}
-sessions_lock = threading.Lock()
-
-FB_REG_STATE = {"running": False, "total_success": 0, "total_fail": 0}
-FB_REG_LOCK = threading.Lock()
-
-# ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py (FULL GỐC) ======================
-# ============================================================================
-TOOL_CODE_XSMMIGV52 = r'''import os
-import sys
 import time
 import json
 import re
@@ -218,10 +181,16 @@ BROWSER_PROFILES = [
      "sec_ch_ua": '"Not_A Brand";v="8", "Chromium";v="120", "CocCoc";v="114"', "sec_ch_ua_platform": '"Windows"'},
 ]
 
+# =========================================================================
+# SỬA LỖI TẠI ĐÂY: Hàm parse_range_input tự động nhận diện input on/off
+# =========================================================================
 def parse_range_input(input_val, default_min=10, default_max=10):
-    val_str = str(input_val).strip()
-    if not val_str:
+    val_str = str(input_val).strip().lower()
+    
+    # Nếu người dùng nhập chữ (on, off, enter) thay vì số thì trả về mặc định
+    if not val_str or val_str in ['on', 'off', 'yes', 'no']:
         return default_min, default_max
+        
     if '-' in val_str:
         parts = val_str.split('-')
         try:
@@ -1394,180 +1363,3 @@ while True:
             os.remove("ListccXSMM.json")
         print(f"\n{pink} ⛔ {red}Tất Cả Cookie Đều Die Hoặc Proxy Lỗi\n")
         break
-'''
-
-TOOL_INFO = {"xsmmigv5.2": {"name": "XSMM IG V5.2", "color": "#ff6b9d"}}
-
-# ============================================================================
-# ==================== FB REG PAGE NÂNG CAO =================================
-# ============================================================================
-def fb_get_dtsg(cookie, proxies):
-    try:
-        r = requests.get('https://www.facebook.com/settings', headers={'cookie': cookie, 'user-agent': 'Mozilla/5.0'}, proxies=proxies, timeout=15)
-        dtsg = re.search(r'name="fb_dtsg" value="(.*?)"', r.text)
-        jz = re.search(r'name="jazoest" value="(.*?)"', r.text)
-        if dtsg and jz: return dtsg.group(1), jz.group(1)
-    except: pass
-    return None, None
-
-def fb_upload_photo(cookie, page_id, img_url, img_type, proxies):
-    try: img_data = requests.get(img_url, timeout=15).content
-    except: return False
-    boundary = '----WebKitFormBoundary' + ''.join(random.choices(string.ascii_letters + string.digits, k=16))
-    headers = {'cookie': cookie, 'user-agent': 'Mozilla/5.0', 'content-type': f'multipart/form-data; boundary={boundary}'}
-    url = f"https://www.facebook.com/api/v1/pages/{page_id}/{'picture' if img_type=='avatar' else 'cover'}/"
-    field_name = "profile_pic" if img_type=='avatar' else "cover_photo"
-    body = (f'--{boundary}\r\nContent-Disposition: form-data; name="{field_name}"; filename="img.jpg"\r\nContent-Type: image/jpeg\r\n\r\n').encode() + img_data + f'\r\n--{boundary}--\r\n'.encode()
-    try:
-        r = requests.post(url, headers=headers, data=body, proxies=proxies, timeout=30)
-        return r.status_code == 200
-    except: return False
-
-def fb_invite_admin(cookie, page_id, target_uid, password, proxies):
-    fb_dtsg, jazoest = fb_get_dtsg(cookie, proxies)
-    if not fb_dtsg: return False
-    actor_m = re.search(r'c_user=(\d+)', cookie); actor_id = actor_m.group(1) if actor_m else ""
-    
-    headers = {'cookie': cookie, 'user-agent': 'Mozilla/5.0', 'content-type': 'application/x-www-form-urlencoded', 'origin': 'https://www.facebook.com'}
-    payload = {
-        'fb_dtsg': fb_dtsg, 'jazoest': jazoest,
-        'variables': json.dumps({"input": {"actor_id": actor_id, "profile_id": page_id, "target_user_id": target_uid, "task_ids": [1, 2, 3, 4, 5], "password": password}}),
-        'doc_id': '5278783472212933'
-    }
-    try:
-        r = requests.post("https://www.facebook.com/api/graphql/", headers=headers, data=payload, proxies=proxies, timeout=20)
-        return 'errors' not in r.json()
-    except: return False
-
-def fb_reg_worker(idx, cookie, page_name, cat, proxy, avt, cover, target_uid, pwd, result_list):
-    res = {"idx": idx, "uid": "", "page_id": "", "page_name": page_name, "status": "Đang xử lý...", "ok": False}
-    try:
-        m = re.search(r'c_user=(\d+)', cookie); res["uid"] = m.group(1) if m else ""
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-        fb_dtsg, jazoest = fb_get_dtsg(cookie, proxies)
-        if not fb_dtsg: res["status"] = "Cookie die"; result_list.append(res); return
-        
-        headers = {'cookie': cookie, 'user-agent': 'Mozilla/5.0', 'content-type': 'application/x-www-form-urlencoded'}
-        payload = {'fb_dtsg': fb_dtsg, 'jazoest': jazoest, 'variables': json.dumps({"input": {"actor_id": res["uid"], "name": page_name, "category_id": cat, "creation_source": "comet"}}), 'doc_id': '5814795813638014'}
-        r = requests.post("https://www.facebook.com/api/graphql/", headers=headers, data=payload, proxies=proxies, timeout=25)
-        pid_match = re.search(r'"page_id":"(\d+)"', json.dumps(r.json().get('data', {})))
-        if not pid_match: res["status"] = "Lỗi tạo Page"; result_list.append(res); return
-        
-        res["page_id"] = pid_match.group(1)
-        if avt: fb_upload_photo(cookie, res["page_id"], avt, 'avatar', proxies)
-        if cover: fb_upload_photo(cookie, res["page_id"], cover, 'cover', proxies)
-        if target_uid and pwd: fb_invite_admin(cookie, res["page_id"], target_uid, pwd, proxies)
-        
-        res["status"] = "OK + QTV"; res["ok"] = True
-        result_list.append(res)
-    except Exception as e:
-        res["status"] = "Lỗi"; result_list.append(res)
-
-def run_fb_reg(tasks, threads):
-    FB_REG_STATE["running"] = True; FB_REG_STATE["total_success"] = 0; FB_REG_STATE["total_fail"] = 0
-    q = Queue(); [q.put((i+1, t['cookie'], t['page_name'], '2200', t.get('proxy',''), t.get('avatar',''), t.get('cover',''), t.get('target_uid',''), t.get('pwd',''))) for i, t in enumerate(tasks)]
-    def worker():
-        while True:
-            try: task = q.get_nowait()
-            except: break
-            try:
-                rl = []
-                fb_reg_worker(*task, rl)
-                if rl:
-                    res = rl[0]
-                    with FB_REG_LOCK:
-                        if res["ok"]: FB_REG_STATE["total_success"] += 1
-                        else: FB_REG_STATE["total_fail"] += 1
-                        socketio.emit('fb_reg_update', {"result": res, "stats": {"success": FB_REG_STATE["total_success"], "fail": FB_REG_STATE["total_fail"]}})
-            except: pass
-            finally: q.task_done()
-    ts = [threading.Thread(target=worker, daemon=True) for _ in range(threads)]
-    for t in ts: t.start()
-    for t in ts: t.join()
-    FB_REG_STATE["running"] = False
-    socketio.emit('fb_reg_done', {"success": FB_REG_STATE["total_success"], "fail": FB_REG_STATE["total_fail"]})
-
-@app.route('/api/fb_reg_start', methods=['POST'])
-def api_fb_reg_start():
-    data = request.json or {}
-    if not data.get('tasks'): return jsonify({"ok": False})
-    threading.Thread(target=run_fb_reg, args=(data['tasks'], int(data.get('threads', 10))), daemon=True).start()
-    return jsonify({"ok": True})
-
-# ============================================================================
-# ==================== ROUTES CƠ BẢN =========================================
-# ============================================================================
-def ensure_tool_file(k):
-    f = os.path.join(TEMP_TOOLS_DIR, "xsmmigv5.2.py")
-    if os.path.exists(f):
-        try: os.remove(f)
-        except: pass
-    with open(f, "w", encoding="utf-8") as fw:
-        fw.write(TOOL_CODE_XSMMIGV52)
-    return f
-
-def read_process_output(sid, process):
-    try:
-        for line in iter(process.stdout.readline, ''):
-            if line == '' and process.poll() is not None: break
-            if line:
-                socketio.emit('output', {'session_id': sid, 'line': line.rstrip(), 'ts': datetime.now().strftime('%H:%M:%S')}, room=sid)
-    except: pass
-    finally:
-        process.wait()
-        socketio.emit('status', {'session_id': sid, 'status': 'stopped'}, room=sid)
-
-@app.route('/')
-def index(): return render_template('index.html', tools=TOOL_INFO)
-
-@app.route('/api/start/<k>', methods=['POST'])
-def api_start(k):
-    sid = str(uuid.uuid4())[:8]; f = ensure_tool_file(k)
-    env = os.environ.copy()
-    env['PYTHONIOENCODING'] = 'utf-8'
-    env['PYTHONUNBUFFERED'] = '1'
-    p = subprocess.Popen(
-        [sys.executable, '-u', f],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        cwd=TEMP_TOOLS_DIR,
-        bufsize=1,
-        universal_newlines=True,
-        encoding='utf-8',
-        errors='replace',
-        env=env
-    )
-    with sessions_lock: sessions[sid] = {"tool": k, "process": p}
-    threading.Thread(target=read_process_output, args=(sid, p), daemon=True).start()
-    return jsonify({"ok": True, "session_id": sid})
-
-@app.route('/api/stop/<sid>', methods=['POST'])
-def api_stop(sid):
-    s = sessions.get(sid)
-    if s:
-        try:
-            p = s["process"]
-            p.terminate()
-            try: p.wait(timeout=2)
-            except subprocess.TimeoutExpired: p.kill()
-            socketio.emit('status', {'session_id': sid, 'status': 'stopped'}, room=sid)
-            return jsonify({"ok": True})
-        except: return jsonify({"ok": False}), 500
-    return jsonify({"ok": False}), 404
-
-@app.route('/api/input/<sid>', methods=['POST'])
-def api_input(sid):
-    s = sessions.get(sid)
-    if s:
-        try:
-            s["process"].stdin.write((request.json or {}).get("text", "") + "\n")
-            s["process"].stdin.flush()
-        except: pass
-    return jsonify({"ok": True})
-
-@socketio.on('join')
-def on_join(data): join_room(data.get('session_id'))
-
-if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), allow_unsafe_werkzeug=True)
