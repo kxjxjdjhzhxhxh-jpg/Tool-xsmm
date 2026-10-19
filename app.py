@@ -33,7 +33,7 @@ FB_REG_STATE = {"running": False, "total_success": 0, "total_fail": 0}
 FB_REG_LOCK = threading.Lock()
 
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py (TÍCH HỢP 2FA.LIVE) ============
+# ==================== TOOL 2: xsmmigv5.2.py (CHỈ COOKIE) ===================
 # ============================================================================
 TOOL_CODE_XSMMIGV52 = r'''import os, sys, time, json, re, random
 from datetime import datetime
@@ -65,74 +65,6 @@ class XSMMTool:
     def complete_tasks(self, type_job, task_ids, uid, cookie_check=""):
         try: return requests.post(f"{self.base_url}/tasks2/complete", headers=self.headers, json={"type": type_job, "task_id": task_ids, "uid": uid, "cookie_check": cookie_check}, timeout=35).json()
         except: return {}
-
-def get_otp_from_2fa_live(secret_key):
-    try:
-        clean_secret = secret_key.replace(" ", "").upper()
-        url = f"https://2fa.live/tok/{clean_secret}"
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            data = r.json()
-            if "token" in data:
-                return data["token"]
-        thread_safe_print(f"{red}[!] 2fa.live trả về lỗi: {r.text}{reset}")
-        return None
-    except Exception as e:
-        thread_safe_print(f"{red}[!] Lỗi kết nối 2fa.live: {e}{reset}")
-        return None
-
-def login_get_cookie(acc_str, proxy=None):
-    try:
-        parts = acc_str.strip().split('|')
-        if len(parts) < 2: return None
-        user = parts[0].strip()
-        pwd = parts[1].strip()
-        secret_2fa = parts[2].strip() if len(parts) > 2 else ""
-        
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-        session = c_requests.Session(impersonate="chrome120")
-        if proxies: session.proxies = proxies
-        
-        headers = {'user-agent': 'Mozilla/5.0', 'x-ig-app-id': '936619743392459', 'content-type': 'application/x-www-form-urlencoded', 'origin': 'https://www.instagram.com', 'referer': 'https://www.instagram.com/'}
-        session.get("https://www.instagram.com/", headers=headers)
-        headers['x-csrftoken'] = session.cookies.get('csrftoken', '')
-        
-        payload = {'username': user, 'enc_password': f"#PWD_INSTAGRAM_BROWSER:0:{int(time.time())}:{pwd}", 'queryParams': '{}', 'optIntoOneTap': 'false'}
-        r = session.post("https://www.instagram.com/api/v1/web/accounts/login/ajax/", headers=headers, data=payload)
-        rj = r.json()
-        
-        if rj.get("authenticated"):
-            pass
-        elif rj.get("two_factor_required"):
-            thread_safe_print(f"{cyan}[*] Nick {user} yêu cầu 2FA...{reset}")
-            otp_code = get_otp_from_2fa_live(secret_2fa)
-            if not otp_code:
-                thread_safe_print(f"{red}[!] Không lấy được mã từ 2fa.live (Kiểm tra lại Secret Key){reset}")
-                return None
-                
-            thread_safe_print(f"{green}[*] 2fa.live trả về mã: {otp_code}{reset}")
-            
-            two_fa_id = rj.get("two_factor_info", {}).get("two_factor_identifier")
-            r2 = session.post("https://www.instagram.com/api/v1/web/accounts/login/ajax/two_factor/", 
-                              headers=headers, 
-                              data={'username': user, 'verificationCode': otp_code, 'two_factor_identifier': two_fa_id, 'trust_this_device': '0'})
-            
-            rj2 = r2.json()
-            if not rj2.get("authenticated"): 
-                thread_safe_print(f"{red}[!] IG từ chối mã 2FA. Có thể do IP hoặc mã đã hết hạn.{reset}")
-                return None
-        else: 
-            if "challenge_url" in str(rj):
-                thread_safe_print(f"{red}[!] Nick {user} bị CHECKPOINT/CHALLENGE.{reset}")
-            else:
-                thread_safe_print(f"{red}[!] Login thất bại (Sai pass hoặc IP bị chặn).{reset}")
-            return None
-            
-        cookies = session.cookies.get_dict()
-        return "; ".join([f"{k}={v}" for k, v in cookies.items() if k in ['csrftoken', 'sessionid', 'ds_user_id', 'mid']])
-    except Exception as e:
-        thread_safe_print(f"{red}[!] Lỗi: {e}{reset}")
-        return None
 
 def get_headers(cookie, csrf):
     return {'accept': '*/*', 'cookie': cookie, 'x-csrftoken': csrf, 'x-ig-app-id': '936619743392459', 'user-agent': 'Mozilla/5.0'}
@@ -173,18 +105,11 @@ def cmt(mid, nd, c, csrf, url, proxy):
     try: return session.post('https://www.instagram.com/api/graphql', data=data, timeout=15).text
     except: return '{"status":"error"}'
 
-def run_account(acc_input, listnv, config_delays, xsmm_token, dl, doi):
-    if "|" in acc_input:
-        thread_safe_print(f"{yellow}[*] Đang đăng nhập bằng TK|MK|2FA...{reset}")
-        c = login_get_cookie(acc_input, None)
-        if not c:
-            thread_safe_print(f"{red}[!] Login thất bại hoặc sai 2FA{reset}")
-            return
-    else:
-        c = acc_input
-    
-    proxy = ""
+def run_account(acc, listnv, config_delays, xsmm_token, dl, doi):
+    c = acc.get("cookie", "")
+    proxy = acc.get("proxy", "")
     xsmm = XSMMTool(token=xsmm_token)
+    
     try:
         r = c_requests.get('https://www.instagram.com/api/v1/accounts/edit/web_form_data/', headers=get_headers(c,""), proxies={"http":proxy,"https":proxy} if proxy else None, impersonate="chrome120", timeout=20).text
         cfg = json.loads(r)
@@ -261,9 +186,9 @@ def main():
     except: sl = 1
     mang = []
     for i in range(sl):
-        print(f"Nhập Cookie hoặc TK|MK|2FA ({i+1}): "); sys.stdout.flush()
+        print(f"Nhập Cookie ({i+1}): "); sys.stdout.flush()
         c = input().strip()
-        if c: mang.append(c)
+        if c: mang.append({"cookie": c, "proxy": ""})
     
     listnv = []
     for job in ['instagram_like', 'instagram_follow', 'instagram_comment']:
@@ -403,6 +328,20 @@ def api_start(k):
     with sessions_lock: sessions[sid] = {"tool": k, "process": p}
     threading.Thread(target=read_process_output, args=(sid, p), daemon=True).start()
     return jsonify({"ok": True, "session_id": sid})
+
+@app.route('/api/stop/<sid>', methods=['POST'])
+def api_stop(sid):
+    s = sessions.get(sid)
+    if s:
+        try:
+            p = s["process"]
+            p.terminate()
+            try: p.wait(timeout=2)
+            except subprocess.TimeoutExpired: p.kill()
+            socketio.emit('status', {'session_id': sid, 'status': 'stopped'}, room=sid)
+            return jsonify({"ok": True})
+        except: return jsonify({"ok": False}), 500
+    return jsonify({"ok": False}), 404
 
 @app.route('/api/input/<sid>', methods=['POST'])
 def api_input(sid):
