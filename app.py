@@ -31,7 +31,7 @@ os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
 sessions = {}
 sessions_lock = threading.Lock()
 
-# BIẾN LƯU TRỮ THỐNG KÊ THEO TỪNG NICK
+# LƯU TRỮ THỐNG KÊ THEO TỪNG NICK
 NICK_STATS = {}
 STATS_LOCK = threading.Lock()
 
@@ -264,7 +264,6 @@ def gui_nhan_xu(job_type, task_list, uid, cookie_check, xsmm, tenfb):
         pts = ck.get('points', 0)
         if 'message' in ck:
             thread_safe_print(f"[{now}] [{tenfb}] {ck['message']} (+{pts} xu)")
-            # BẮT LOG ĐỂ WEBSOCKET ĐỌC
             if pts > 0: thread_safe_print(f"[[XU_UPDATE]]|{tenfb}|{pts}|{len(task_list)}")
         elif ck.get("is_timeout"): thread_safe_print(f"[{now}] [{tenfb}] {ck['message']}")
         elif 'error' in ck: thread_safe_print(f"[{now}] [{tenfb}] LỖI: {ck['error']}")
@@ -453,7 +452,7 @@ if __name__ == "__main__":
 '''
 
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py (GOM 8 + XU) ===================
+# ==================== TOOL 2: xsmmigv5.2.py ================================
 # ============================================================================
 TOOL_CODE_XSMMIGV52 = r'''import os
 import sys
@@ -1057,7 +1056,6 @@ def read_process_output(sid, process):
                     update_nick_stats(sid, current_nick, is_job=False, status="Đang chạy")
 
                 # BẮT LOG XU & JOB THEO ĐỊNH DẠNG RIÊNG CỦA TOOL
-                # 1. Tool có in dòng [[XU_UPDATE]]|tennick|số_xu|số_job (cực kỳ chính xác)
                 match_xu_custom = re.search(r'\[\[XU_UPDATE\]\]\|(.*?)\|(\d+)\|(\d+)', line_str)
                 if match_xu_custom:
                     nick_in_log = match_xu_custom.group(1).strip()
