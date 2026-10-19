@@ -31,28 +31,17 @@ os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
 sessions = {}
 sessions_lock = threading.Lock()
 
-# LƯU TRỮ THỐNG KÊ THEO TỪNG NICK
 NICK_STATS = {}
 STATS_LOCK = threading.Lock()
 
-FB_REG_STATE = {
-    "running": False,
-    "results": [],
-    "total_success": 0,
-    "total_fail": 0,
-    "start_time": 0
-}
+FB_REG_STATE = {"running": False, "total_success": 0, "total_fail": 0}
 FB_REG_LOCK = threading.Lock()
 
-IG_LOGIN_STATE = {
-    "running": False,
-    "total_success": 0,
-    "total_fail": 0
-}
+IG_LOGIN_STATE = {"running": False, "total_success": 0, "total_fail": 0}
 IG_LOGIN_LOCK = threading.Lock()
 
 # ============================================================================
-# ==================== TOOL 1: xsmmv3.2.py ==================================
+# ==================== TOOL 1: xsmmv3.2.py (FULL CODE) ======================
 # ============================================================================
 TOOL_CODE_XSMMV32 = r'''import os
 import sys
@@ -452,7 +441,7 @@ if __name__ == "__main__":
 '''
 
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py ================================
+# ==================== TOOL 2: xsmmigv5.2.py (FULL CODE) ====================
 # ============================================================================
 TOOL_CODE_XSMMIGV52 = r'''import os
 import sys
@@ -1045,25 +1034,19 @@ def read_process_output(sid, process):
             if line == '' and process.poll() is not None: break
             if line:
                 line_str = line.rstrip()
-                
-                # Gửi log thô
                 socketio.emit('output', {'session_id': sid, 'line': line_str, 'ts': datetime.now().strftime('%H:%M:%S')}, room=sid)
                 
-                # BẮT LOG TÊN NICK ĐỂ HIỂN THỊ LÊN BẢNG
                 match_nick = re.search(r'NICK(?:\s+LIVE)?\s*\[([^|\]]+)', line_str)
                 if match_nick:
                     current_nick = match_nick.group(1).strip()
                     update_nick_stats(sid, current_nick, is_job=False, status="Đang chạy")
 
-                # BẮT LOG XU & JOB THEO ĐỊNH DẠNG RIÊNG CỦA TOOL
                 match_xu_custom = re.search(r'\[\[XU_UPDATE\]\]\|(.*?)\|(\d+)\|(\d+)', line_str)
                 if match_xu_custom:
                     nick_in_log = match_xu_custom.group(1).strip()
                     xu_nhan = int(match_xu_custom.group(2))
-                    jobs_done = int(match_xu_custom.group(3))
                     update_nick_stats(sid, nick_in_log, is_job=True, xu_amount=xu_nhan)
                 
-                # 2. Đề phòng tool in chuỗi text thông thường: "Thành công (+51 xu, 3/3 job)"
                 elif "Thành công" in line_str and "xu" in line_str:
                     match_xu_text = re.search(r'\[(.*?)\].*?\(\+(\d+)\s*xu', line_str)
                     if match_xu_text:
