@@ -41,7 +41,7 @@ IG_LOGIN_STATE = {"running": False, "total_success": 0, "total_fail": 0}
 IG_LOGIN_LOCK = threading.Lock()
 
 # ============================================================================
-# ==================== TOOL 1: xsmmv3.2.py (FULL CODE) ======================
+# ==================== TOOL 1: xsmmv3.2.py ==================================
 # ============================================================================
 TOOL_CODE_XSMMV32 = r'''import os
 import sys
@@ -441,7 +441,7 @@ if __name__ == "__main__":
 '''
 
 # ============================================================================
-# ==================== TOOL 2: xsmmigv5.2.py (FULL CODE) ====================
+# ==================== TOOL 2: xsmmigv5.2.py ================================
 # ============================================================================
 TOOL_CODE_XSMMIGV52 = r'''import os
 import sys
@@ -1015,6 +1015,9 @@ def ensure_tool_file(k):
 def update_nick_stats(sid, nick, is_job=False, xu_amount=0, status="Đang chạy"):
     global NICK_STATS
     with STATS_LOCK:
+        nick = nick.strip().strip('[]')
+        if not nick or len(nick) > 30 or ":" in nick: return 
+
         if nick not in NICK_STATS:
             NICK_STATS[nick] = {"jobs": 0, "xu": 0, "status": status}
         
@@ -1036,7 +1039,7 @@ def read_process_output(sid, process):
                 line_str = line.rstrip()
                 socketio.emit('output', {'session_id': sid, 'line': line_str, 'ts': datetime.now().strftime('%H:%M:%S')}, room=sid)
                 
-                match_nick = re.search(r'NICK(?:\s+LIVE)?\s*\[([^|\]]+)', line_str)
+                match_nick = re.search(r'NICK(?:\s+LIVE)?\s*\[([a-zA-Z0-9_.]+)\s*\|', line_str)
                 if match_nick:
                     current_nick = match_nick.group(1).strip()
                     update_nick_stats(sid, current_nick, is_job=False, status="Đang chạy")
@@ -1045,16 +1048,13 @@ def read_process_output(sid, process):
                 if match_xu_custom:
                     nick_in_log = match_xu_custom.group(1).strip()
                     xu_nhan = int(match_xu_custom.group(2))
-                    update_nick_stats(sid, nick_in_log, is_job=True, xu_amount=xu_nhan)
-                
-                elif "Thành công" in line_str and "xu" in line_str:
-                    match_xu_text = re.search(r'\[(.*?)\].*?\(\+(\d+)\s*xu', line_str)
-                    if match_xu_text:
-                        nick_in_log = match_xu_text.group(1).strip()
-                        xu_nhan = int(match_xu_text.group(2))
-                        update_nick_stats(sid, nick_in_log, is_job=True, xu_amount=xu_nhan)
-                    else:
-                        update_nick_stats(sid, current_nick, is_job=True)
+                    jobs_done = int(match_xu_custom.group(3))
+                    
+                    with STATS_LOCK:
+                        if nick_in_log in NICK_STATS:
+                            NICK_STATS[nick_in_log]["jobs"] += jobs_done
+                            NICK_STATS[nick_in_log]["xu"] += xu_nhan
+                            socketio.emit('table_update', NICK_STATS, room=sid)
 
     except Exception as e:
         print(f"Lỗi đọc log: {e}")
@@ -1083,6 +1083,14 @@ def api_input(sid):
     if s:
         try: s["process"].stdin.write((request.json or {}).get("text", "") + "\n"); s["process"].stdin.flush()
         except: pass
+    return jsonify({"ok": True})
+
+@app.route('/api/reset_stats', methods=['POST'])
+def api_reset_stats():
+    global NICK_STATS
+    with STATS_LOCK:
+        NICK_STATS.clear()
+    socketio.emit('table_update', NICK_STATS) 
     return jsonify({"ok": True})
 
 @socketio.on('join')
