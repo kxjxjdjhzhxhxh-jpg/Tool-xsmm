@@ -19,14 +19,11 @@
     </header>
 
     <nav class="tabs">
-        <!-- 3 Tab XSMM -->
         {% for key, info in tools.items() %}
         <button class="tab-btn {% if loop.first %}active{% endif %}" data-tool="{{ key }}" style="--tab-color: {{ info.color }}">
             <span class="tab-dot"></span> {{ info.name }}
         </button>
         {% endfor %}
-        
-        <!-- 2 Tab Bổ sung -->
         <button class="tab-btn" data-tool="ig_login" style="--tab-color: #f59e0b">
             <span class="tab-dot"></span> IG Login (TK|MK|2FA)
         </button>
@@ -36,7 +33,6 @@
     </nav>
 
     <main class="content">
-        <!-- PANELS CHO 3 TOOL XSMM -->
         {% for key, info in tools.items() %}
         {% set safe_key = key | replace('.', '_') %}
         <section class="tool-panel {% if loop.first %}active{% endif %}" data-tool="{{ key }}" data-safe="{{ safe_key }}" style="--panel-color: {{ info.color }}">
@@ -94,10 +90,10 @@
                 <span class="output-count">0 dòng</span>
             </div>
 
-            <!-- BẢNG THỐNG KÊ -->
             <div class="stats-table-wrap" style="background: #111; border: 1px solid #333; border-radius: 8px; margin-bottom: 15px; overflow: hidden;">
-                <div style="padding: 10px 15px; background: #1a1a1a; border-bottom: 1px solid #333; font-weight: bold; color: #00d4ff;">
-                    📊 Thống Kê Xu Cày Được
+                <div style="padding: 10px 15px; background: #1a1a1a; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-weight: bold; color: #00d4ff;">📊 Thống Kê Xu Cày Được</span>
+                    <button class="btn btn-reset-stats" style="background: #ef4444; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: bold;">🔄 Reset Data</button>
                 </div>
                 <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; color: white;">
                     <thead>
