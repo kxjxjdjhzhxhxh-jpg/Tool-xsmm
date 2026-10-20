@@ -21,7 +21,6 @@ function appendLine(el, line, ts = null) {
     el.appendChild(d); el.scrollTop = el.scrollHeight;
 }
 
-// TABS - Chỉ xử lý sự kiện click, không tự động click ở đây nữa
 $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const t = btn.dataset.tool;
@@ -134,6 +133,19 @@ $$('.btn-stop').forEach(btn => {
         if (!confirm('Dừng tool?')) return;
         await fetch(`/api/stop/${s.sessionId}`, { method: 'POST' });
         setStatus(t, 'stopped');
+    });
+});
+
+// Bắt sự kiện nút Reset Bảng Thống Kê
+document.querySelectorAll('.btn-reset-stats').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        if (!confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu thống kê (Job/Xu) trên bảng?')) return;
+        try {
+            const res = await fetch('/api/reset_stats', { method: 'POST' });
+            if ((await res.json()).ok) {
+                console.log('Đã reset bảng thống kê');
+            }
+        } catch (e) { alert('Lỗi khi reset: ' + e.message); }
     });
 });
 
