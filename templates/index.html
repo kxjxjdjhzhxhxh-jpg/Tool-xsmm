@@ -78,6 +78,12 @@
                         {% endif %}
                     </div>
                 </div>
+                {% if key == 'xsmmigv5.2' %}
+                <div class="form-row form-row-inline">
+                    <label>📦 Số job Follow gom nhận xu:</label>
+                    <input type="number" class="cfg-input cfg-follow-batch" value="8" min="1" style="width:80px">
+                </div>
+                {% endif %}
                 <div class="form-actions">
                     <button class="btn btn-start" data-tool="{{ key }}"><span class="btn-icon">▶</span> Chạy Tool</button>
                     <button class="btn btn-stop" data-tool="{{ key }}" disabled><span class="btn-icon">⏹</span> Dừng</button>
@@ -122,7 +128,6 @@
         </section>
         {% endfor %}
 
-        <!-- TOOL IG LOGIN -->
         <section class="tool-panel" data-tool="ig_login" style="--panel-color: #f59e0b">
             <div class="config-form">
                 <div class="form-title">🔑 ĐĂNG NHẬP IG BẰNG TK|MK|2FA</div>
@@ -149,7 +154,6 @@
             </div>
         </section>
 
-        <!-- TOOL FB REG PAGE -->
         <section class="tool-panel" data-tool="fb_regpage" style="--panel-color: #1877f2">
             <div class="config-form">
                 <div class="form-title">📘 FB REG PAGE + UP AVT + CHUYỂN PAGE</div>
