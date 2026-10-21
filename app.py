@@ -27,16 +27,13 @@ os.makedirs(SESSIONS_DIR, exist_ok=True)
 TEMP_TOOLS_DIR = os.path.join(tempfile.gettempdir(), "ta_tool_embedded")
 os.makedirs(TEMP_TOOLS_DIR, exist_ok=True)
 
-# ================== BIẾN TOÀN CỤC ==================
 sessions = {}
 sessions_lock = threading.Lock()
-
 NICK_STATS = {}
 STATS_LOCK = threading.Lock()
 
 FB_REG_STATE = {"running": False, "total_success": 0, "total_fail": 0}
 FB_REG_LOCK = threading.Lock()
-
 IG_LOGIN_STATE = {"running": False, "total_success": 0, "total_fail": 0}
 IG_LOGIN_LOCK = threading.Lock()
 
@@ -662,7 +659,7 @@ def gui_nhan_xu(job_type, task_list, uid, cookie_check, xsmm, tenfb):
         elif 'error' in ck: thread_safe_print(f"[{now}] [{tenfb}] LỖI: {ck['error']}")
         if ck.get('countdown', 0) > 0: time.sleep(ck['countdown'])
 
-def run_account_v52(ad, listnv, dly, xsmm_token, doi, ck_global):
+def run_account_v52(ad, listnv, dly, xsmm_token, doi, ck_global, batch_follow=8):
     c = ad["cookie"]; p = ad.get("proxy", ""); prof = ad.get("profile") or BROWSER_PROFILES[0]
     target_ck = ck_global if ck_global else c
     acc = check_cookie_ig(c, p, profile=prof)
@@ -717,8 +714,8 @@ def run_account_v52(ad, listnv, dly, xsmm_token, doi, ck_global):
                     if ok: 
                         solo = 0
                         cache.append(nv.get('id'))
-                        thread_safe_print(f"{green}[+] [{tenfb}] Follow OK -> Đã gom ({len(cache)}/8){reset}")
-                        if len(cache) >= 8:
+                        thread_safe_print(f"{green}[+] [{tenfb}] Follow OK -> Đã gom ({len(cache)}/{batch_follow}){reset}")
+                        if len(cache) >= batch_follow:
                             gui_nhan_xu("instagram_follow", cache, idfb, target_ck, xsmm, tenfb)
                             cache = []
                     else: solo += 1
@@ -786,6 +783,12 @@ def main():
         if doi < 1: doi = 99999
     except: doi = 99999
 
+    sys.stdout.write("Số job Follow gom nhận xu (mặc định 8): "); sys.stdout.flush()
+    try:
+        batch_follow = int(input().strip())
+        if batch_follow < 1: batch_follow = 8
+    except: batch_follow = 8
+
     listnv = []; dly = {'tym': (10, 15), 'follow': (15, 20), 'cmt': (20, 25)}
     def parse_r(v, dmin, dmax):
         v = str(v).strip()
@@ -818,7 +821,7 @@ def main():
 
     print(f"{cyan}[*] Chạy {len(mangcookie)} nick | {max_threads} luồng{reset}\n")
     with ThreadPoolExecutor(max_workers=max_threads) as executor:
-        futures = [executor.submit(run_account_v52, ad, listnv, dly, token, doi, ck_global) for ad in mangcookie]
+        futures = [executor.submit(run_account_v52, ad, listnv, dly, token, doi, ck_global, batch_follow) for ad in mangcookie]
         for f in futures: f.result()
 
 if __name__ == "__main__":
@@ -920,7 +923,6 @@ def run_fb_reg(tasks, threads):
     ts = [threading.Thread(target=worker, daemon=True) for _ in range(threads)]
     for t in ts: t.start()
     for t in ts: t.join()
-    FB_REG_STATE["running"] = False
     socketio.emit('fb_reg_done', {"success": FB_REG_STATE["total_success"], "fail": FB_REG_STATE["total_fail"]})
 
 @app.route('/api/fb_reg_start', methods=['POST'])
