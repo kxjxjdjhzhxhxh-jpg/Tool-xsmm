@@ -6,6 +6,22 @@ function $$(sel, root = document) { return [...root.querySelectorAll(sel)]; }
 function now() { return new Date().toLocaleTimeString('vi-VN', { hour12: false }); }
 function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+// Hàm tạo âm thanh thông báo
+function playBeep() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime); 
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+    } catch (e) { console.log('Audio play failed', e); }
+}
+
 function classifyLine(line) {
     if (/\b(traceback|exception|error|lỗi|die|fail|thất bại)\b/i.test(line)) return 'err';
     if (/\b(warn|cảnh báo|retry|timeout)\b/i.test(line)) return 'warn';
@@ -61,6 +77,7 @@ function buildInputSequence(t) {
     const thr = getCfg(t, 'cfg-threads')?.value || '10';
     const rot = getCfg(t, 'cfg-rotate')?.value || '99999';
     const wait = getCfg(t, 'cfg-wait')?.value || '150';
+    const followBatch = getCfg(t, 'cfg-follow-batch')?.value || '8';
     const jL = getCfg(t, 'cfg-job-like')?.checked;
     const jF = getCfg(t, 'cfg-job-follow')?.checked;
     const jC = getCfg(t, 'cfg-job-comment')?.checked;
@@ -83,6 +100,7 @@ function buildInputSequence(t) {
         seq.push(String(cookies.length));
         for (let i = 0; i < cookies.length; i++) seq.push(cookies[i], proxies[i] || '');
         seq.push(rot);
+        seq.push(followBatch);
         seq.push(jL ? 'on' : 'off'); if (jL) seq.push(dTym);
         seq.push(jF ? 'on' : 'off'); if (jF) seq.push(dFol);
         seq.push(jC ? 'on' : 'off'); if (jC) seq.push(dCmt);
@@ -136,15 +154,12 @@ $$('.btn-stop').forEach(btn => {
     });
 });
 
-// Bắt sự kiện nút Reset Bảng Thống Kê
 document.querySelectorAll('.btn-reset-stats').forEach(btn => {
     btn.addEventListener('click', async () => {
         if (!confirm('Bạn có chắc muốn xóa toàn bộ dữ liệu thống kê (Job/Xu) trên bảng?')) return;
         try {
             const res = await fetch('/api/reset_stats', { method: 'POST' });
-            if ((await res.json()).ok) {
-                console.log('Đã reset bảng thống kê');
-            }
+            if ((await res.json()).ok) { console.log('Đã reset bảng thống kê'); }
         } catch (e) { alert('Lỗi khi reset: ' + e.message); }
     });
 });
@@ -159,81 +174,7 @@ function sendStdin(t) {
 $$('.btn-send').forEach(btn => btn.addEventListener('click', () => sendStdin(btn.dataset.tool)));
 $$('.stdin-input').forEach(inp => inp.addEventListener('keydown', e => { if (e.key === 'Enter') sendStdin(inp.dataset.tool); }));
 
-// ================== IG LOGIN ==================
-document.getElementById('btn_ig_login')?.addEventListener('click', async () => {
-    const tasksRaw = document.getElementById('ig_login_tasks').value.trim();
-    const threads = document.getElementById('ig_login_threads').value;
-    if (!tasksRaw) return alert('Nhập danh sách TK!');
-    
-    const lines = tasksRaw.split('\n').map(l => l.trim()).filter(Boolean);
-    const tasks = lines.map(l => {
-        const p = l.split('|');
-        return { acc: l, proxy: p[3] || '' };
-    });
-    
-    document.getElementById('ig_login_tbody').innerHTML = '';
-    const res = await fetch('/api/ig_login_start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tasks, threads}) });
-});
-
-socket.on('ig_login_update', d => {
-    const tbody = document.getElementById('ig_login_tbody');
-    if (!tbody || !d.result) return;
-    if (tbody.querySelector('tr td[colspan]')) tbody.innerHTML = '';
-    const r = d.result;
-    const color = r.ok ? '#22c55e' : '#ef4444';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.idx}</td><td>${r.acc.split('|')[0]}</td><td style="color:${color}">${r.status}</td><td style="font-size:10px;max-width:100px;overflow:hidden;white-space:nowrap">${r.cookie}</td>`;
-    tbody.appendChild(tr);
-    tbody.scrollTop = tbody.scrollHeight;
-});
-
-// ================== FB REG PAGE ==================
-document.getElementById('btn_fb_reg')?.addEventListener('click', async () => {
-    const tasksRaw = document.getElementById('fb_reg_tasks').value.trim();
-    const namesRaw = document.getElementById('fb_reg_names').value.trim();
-    const avatarsRaw = document.getElementById('fb_reg_avatars').value.trim();
-    const coversRaw = document.getElementById('fb_reg_covers').value.trim();
-    const uidNhan = document.getElementById('fb_reg_uid').value.trim();
-    const threads = document.getElementById('fb_reg_threads').value;
-    
-    if (!tasksRaw || !namesRaw) return alert('Nhập Cookie và Tên Page!');
-    const taskLines = tasksRaw.split('\n').map(s => s.trim()).filter(Boolean);
-    const nameLines = namesRaw.split('\n').map(s => s.trim()).filter(Boolean);
-    const avatarLines = avatarsRaw ? avatarsRaw.split('\n').map(s => s.trim()).filter(Boolean) : [];
-    const coverLines = coversRaw ? coversRaw.split('\n').map(s => s.trim()).filter(Boolean) : [];
-    
-    const tasks = [];
-    for (let i = 0; i < taskLines.length; i++) {
-        const parts = taskLines[i].split('|');
-        tasks.push({
-            cookie: parts[0].trim(), proxy: parts[1]?.trim() || '', page_name: nameLines[i % nameLines.length],
-            avatar: avatarLines[i % avatarLines.length] || '', cover: coverLines[i % coverLines.length] || '', target_uid: uidNhan
-        });
-    }
-    
-    document.getElementById('fb_reg_tbody').innerHTML = '';
-    const res = await fetch('/api/fb_reg_start', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tasks, threads}) });
-    if ((await res.json()).ok) { alert('Bắt đầu reg page + chuyển QTV!'); }
-});
-
-socket.on('fb_reg_update', d => {
-    const tbody = document.getElementById('fb_reg_tbody');
-    if (!tbody || !d.result) return;
-    if (tbody.querySelector('tr td[colspan]')) tbody.innerHTML = '';
-    const r = d.result;
-    const color = r.ok ? 'status-ok' : 'status-fail';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.idx}</td><td>${r.uid}</td><td>${r.page_id}</td><td>${r.page_name}</td><td class="${color}">${r.status}</td>`;
-    tbody.appendChild(tr);
-    tbody.scrollTop = tbody.scrollHeight;
-    if(d.stats){ document.getElementById('fb_stat_ok').innerText=d.stats.success; document.getElementById('fb_stat_err').innerText=d.stats.fail; }
-});
-
-socket.on('fb_reg_done', d => {
-    alert(`Hoàn tất FB! OK: ${d.success}, Lỗi: ${d.fail}`);
-});
-
-// ================== SOCKET CHUNG & BẢNG THỐNG KÊ ==================
+// SOCKET CHUNG & BẢNG THỐNG KÊ
 socket.on('output', d => {
     const { session_id, line, ts } = d;
     const t = Object.keys(state).find(k => state[k].sessionId === session_id);
@@ -243,6 +184,18 @@ socket.on('output', d => {
     let isFollowGom = line.includes('Đã gom (') && line.includes('/8)');
     let isXuUpdate = line.includes('[[XU_UPDATE]]');
     
+    // PHÁT ÂM THANH CẢNH BÁO KHI CÓ LỖI DIE HOẶC HẾT JOB
+    if (line.includes("Cookie die") || line.includes("Cookie lỗi")) {
+        playBeep();
+        alert(`[CẢNH BÁO] Tài khoản bị DIE! Vui lòng kiểm tra lại Cookie.`);
+    }
+    if (line.includes("Chờ Hết Nhiệm Vụ")) {
+        playBeep();
+    }
+    if (line.includes("[*] Nghỉ") && line.includes("s")) {
+        playBeep();
+    }
+
     if (isXuUpdate) return; 
 
     const div = document.createElement('div');
@@ -299,11 +252,11 @@ socket.on('status', d => {
         setStatus(t, 'stopped');
         const term = getTerm(t);
         if (term) appendLine(term, `■ ${message || 'Đã dừng'} (exit: ${return_code ?? '?'})`);
+        playBeep(); // Kêu bíp khi tool dừng hoàn toàn
     }
 });
 
-// Lưu config tự động
-const CFG_FIELDS = ['cfg-token', 'cfg-cookies', 'cfg-cookiecheck', 'cfg-delay-tym', 'cfg-delay-follow', 'cfg-delay-comment', 'cfg-threads', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin'];
+const CFG_FIELDS = ['cfg-token', 'cfg-cookies', 'cfg-cookiecheck', 'cfg-delay-tym', 'cfg-delay-follow', 'cfg-delay-comment', 'cfg-threads', 'cfg-rotate', 'cfg-wait', 'cfg-delaycoin', 'cfg-follow-batch'];
 CFG_FIELDS.forEach(cls => {
     $$('.' + cls).forEach(inp => {
         const t = inp.closest('.tool-panel')?.dataset.tool; if (!t) return;
